@@ -2,6 +2,26 @@
 
 class BoseModuleSourceSelector extends IPSModule {
 
+
+    private function SetValueIfChanged($ident, $value)
+    {
+        $vid = @$this->GetIDForIdent($ident);
+        if ($vid === 0) {
+            return;
+        }
+        $old = GetValue($vid);
+        if (is_float($old) || is_float($value)) {
+            if (round((float)$old, 3) === round((float)$value, 3)) {
+                return;
+            }
+        } else {
+            if ($old === $value) {
+                return;
+            }
+        }
+        $this->SetValue($ident, $value);
+    }
+
     // Überschreibt die interne IPS_Create($id) Funktion
     public function Create() {
         // Diese Zeile nicht löschen.
@@ -27,14 +47,44 @@ class BoseModuleSourceSelector extends IPSModule {
         $this->RegisterPropertyString("modulename", "");
         $this->RegisterPropertyInteger("sourcecount", 1);
 
-        $this->RegisterTimer("GetSource", 1000, 'if (strlen(IPS_GetProperty(' . $this->InstanceID . ', "modulename")) > 0) BOSE_SendCommand(' . $this->InstanceID . ', \'GA"\' . IPS_GetProperty(' . $this->InstanceID . ', "modulename") . \'">1\');');
     }
 
     // Überschreibt die intere IPS_ApplyChanges($id) Funktion
     public function ApplyChanges() {
-        // Diese Zeile nicht löschen
         parent::ApplyChanges();
+
+        $this->RegisterTimer("PollSource", 30000, "BOSE_PollSource(" . $this->InstanceID . ");");
+        $this->RegisterTimer("BurstPoll", 0, "BOSE_BurstPoll(" . $this->InstanceID . ");");
     }
+
+    public function PollSource()
+    {
+        $module = IPS_GetProperty($this->InstanceID, "modulename");
+        if (strlen($module) == 0) {
+            return;
+        }
+
+        $this->SendCommand('GA"' . $module . '">1');
+    }
+
+    private function StartBurstPolling($seconds)
+    {
+        $this->SetBuffer("BurstUntil", (string)(time() + (int)$seconds));
+        $this->SetTimerInterval("BurstPoll", 500);
+    }
+
+    public function BurstPoll()
+    {
+        $until = (int)$this->GetBuffer("BurstUntil");
+        if ($until === 0 || time() > $until) {
+            $this->SetTimerInterval("BurstPoll", 0);
+            $this->SetBuffer("BurstUntil", "0");
+            return;
+        }
+
+        $this->PollSource();
+    }
+
 
     public function SetSource($source) {
         if ($source < 1 || $source > intval(IPS_GetProperty($this->InstanceID, "sourcecount"))) {
@@ -43,7 +93,9 @@ class BoseModuleSourceSelector extends IPSModule {
         }
 
         $this->SendCommand('SA"' . IPS_GetProperty($this->InstanceID, "modulename") . '">1=' . $source);
-    }
+    
+        $this->StartBurstPolling(3);
+}
 
     public function SendCommand($msg) {
         $this->SendDataToParent(json_encode([
@@ -66,7 +118,7 @@ class BoseModuleSourceSelector extends IPSModule {
             return;
 
         if ($data["Index1"] == 1) {
-            $this->SetValue("Source", floatval($data["Value"]));
+            $this->SetValueIfChanged("Source", intval($data["Value"]));
         }
 
         // Im Meldungsfenster zu Debug zwecken ausgeben
@@ -80,7 +132,7 @@ class BoseModuleSourceSelector extends IPSModule {
             return false;
         }
 
-        $this->SetValue($Ident, $Value);
+        $this->SetValueIfChanged($Ident, $Value);
 
         return true;
     }

@@ -9,6 +9,27 @@ class BoseDevice extends IPSModule
     ];
 
 
+
+    private function SetValueIfChanged($ident, $value)
+    {
+        $vid = @$this->GetIDForIdent($ident);
+        if ($vid === 0) {
+            return;
+        }
+        $old = GetValue($vid);
+        // float compare with rounding to avoid jitter
+        if (is_float($old) || is_float($value)) {
+            if (round((float)$old, 3) === round((float)$value, 3)) {
+                return;
+            }
+        } else {
+            if ($old === $value) {
+                return;
+            }
+        }
+        $this->SetValue($ident, $value);
+    }
+
     // Überschreibt die interne IPS_Create($id) Funktion
     public function Create()
     {
@@ -44,8 +65,8 @@ class BoseDevice extends IPSModule
         $this->RegisterVariableInteger("ParameterSet", "Parameter Set", "BoseParameterSet", 1);
         $this->EnableAction("ParameterSet");
 
-        $this->RegisterTimer("CheckOnlineStatus", 5000, "BOSE_RefreshOnlineStatus(" . $this->InstanceID . ");");
-        $this->RegisterTimer("GetLastParameterSet", 10000, 'BOSE_SendCommand(' . $this->InstanceID . ', \'GS\');');
+        $this->RegisterTimer("CheckOnlineStatus", 30000, "BOSE_RefreshOnlineStatus(" . $this->InstanceID . ");");
+        $this->RegisterTimer("GetLastParameterSet", 30000, 'BOSE_SendCommand(' . $this->InstanceID . ', \'GS\');');
         $this->RegisterTimer("CommandTimeoutCheck", 30000, 'BOSE_CommandTimeoutCheck(' . $this->InstanceID . ');');
 $this->RegisterTimer("FlushPending", 500, "BOSE_FlushPending(" . $this->InstanceID . ");");
 
@@ -90,7 +111,7 @@ $this->RegisterTimer("FlushPending", 500, "BOSE_FlushPending(" . $this->Instance
         }
 
         $isOnline = !($pingTimeouts >= 4);
-        $this->SetValue("OnlineStatus", $isOnline);
+        $this->SetValueIfChanged("OnlineStatus", $isOnline);
         $this->SetBuffer("pingTimeouts", $pingTimeouts);
 
         // Wenn das Gerät als offline erkannt wird, schließen wir den Socket genau einmal,
@@ -362,7 +383,7 @@ $this->RegisterTimer("FlushPending", 500, "BOSE_FlushPending(" . $this->Instance
 
                 if (substr($cmd, 0, 2) == "S ") {
                     $split = explode(" ", substr($cmd, 0, strlen($cmd) - 1));
-                    $this->SetValue("ParameterSet", intval(hexdec($split[1])));
+                    $this->SetValueIfChanged("ParameterSet", intval(hexdec($split[1])));
                 } else if (substr($cmd, 0, 2) == "GA") {
                     unset($data["DataID"]);
                     $data["moduleName"] = substr($cmd, 3, strpos(substr($cmd, 3), "\""));
@@ -424,7 +445,7 @@ $this->RegisterTimer("FlushPending", 500, "BOSE_FlushPending(" . $this->Instance
                 return false;
         }
 
-        $this->SetValue($Ident, $Value);
+        $this->SetValueIfChanged($Ident, $Value);
 
         return true;
     }

@@ -2,6 +2,26 @@
 
 class BoseModuleGain extends IPSModule {
 
+
+    private function SetValueIfChanged($ident, $value)
+    {
+        $vid = @$this->GetIDForIdent($ident);
+        if ($vid === 0) {
+            return;
+        }
+        $old = GetValue($vid);
+        if (is_float($old) || is_float($value)) {
+            if (round((float)$old, 3) === round((float)$value, 3)) {
+                return;
+            }
+        } else {
+            if ($old === $value) {
+                return;
+            }
+        }
+        $this->SetValue($ident, $value);
+    }
+
     // Überschreibt die interne IPS_Create($id) Funktion
     public function Create() {
         // Diese Zeile nicht löschen.
@@ -48,15 +68,27 @@ class BoseModuleGain extends IPSModule {
 
         $this->RegisterPropertyString("modulename", "");
 
-        $this->RegisterTimer("GetLevel", 1000, 'if (strlen(IPS_GetProperty(' . $this->InstanceID . ', "modulename")) > 0) BOSE_SendCommand(' . $this->InstanceID . ', \'GA"\' . IPS_GetProperty(' . $this->InstanceID . ', "modulename") . \'">1\');');
-        $this->RegisterTimer("GetMute", 1000, 'if (strlen(IPS_GetProperty(' . $this->InstanceID . ', "modulename")) > 0) BOSE_SendCommand(' . $this->InstanceID . ', \'GA"\' . IPS_GetProperty(' . $this->InstanceID . ', "modulename") . \'">2\');');
     }
 
     // Überschreibt die intere IPS_ApplyChanges($id) Funktion
     public function ApplyChanges() {
-        // Diese Zeile nicht löschen
         parent::ApplyChanges();
+
+        $this->RegisterTimer("PollGain", 30000, "BOSE_PollGain(" . $this->InstanceID . ");");
     }
+
+    public function PollGain()
+    {
+        $module = IPS_GetProperty($this->InstanceID, "modulename");
+        if (strlen($module) == 0) {
+            return;
+        }
+
+        // Index 1 = Level, Index 2 = Mute
+        $this->SendCommand('GA"' . $module . '">1');
+        $this->SendCommand('GA"' . $module . '">2');
+    }
+
 
     public function SetLevel($level) {
         if ($level < -60.5 || $level > 12.0) {
@@ -104,11 +136,11 @@ class BoseModuleGain extends IPSModule {
         $index1 = intval($data["Index1"]);
 
         if ($index1 == 1) {
-            $this->SetValue("Level", floatval($data["Value"]));
+            $this->SetValueIfChanged("Level", floatval($data["Value"]));
             //print_r(intval(100 - ($data["Value"] / -60.5 * 100)));
-            $this->SetValue("LevelPercent", intval(100 - ($data["Value"] / -60.5 * 100)));
+            $this->SetValueIfChanged("LevelPercent", intval(100 - ($data["Value"] / -60.5 * 100)));
         } else if ($index1 == 2) {
-            $this->SetValue("Mute", $data["Value"] == "F");
+            $this->SetValueIfChanged("Mute", $data["Value"] == "F");
         }
 
         // Im Meldungsfenster zu Debug zwecken ausgeben
@@ -121,17 +153,17 @@ class BoseModuleGain extends IPSModule {
             if (!$this->SetLevel(floatval($Value)))
                 return false;
 
-            $this->SetValue("LevelPercent", intval(100 - ($Value / -60.5 * 100)));
+            $this->SetValueIfChanged("LevelPercent", intval(100 - ($Value / -60.5 * 100)));
         } else if ($Ident == "Mute") {
             $this->SetActive($Value);
         } else if ($Ident == "LevelPercent") {
             if (!$this->SetLevelPercent($Value))
                 return false;
 
-            $this->SetValue("Level", -60.5 + 60.5 * ($Value / 100));
+            $this->SetValueIfChanged("Level", -60.5 + 60.5 * ($Value / 100));
         }
 
-        $this->SetValue($Ident, $Value);
+        $this->SetValueIfChanged($Ident, $Value);
 
         return true;
     }
