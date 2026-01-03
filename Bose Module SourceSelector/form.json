@@ -1,0 +1,15 @@
+{
+  "elements": [
+    {
+      "type": "ValidationTextBox",
+      "caption": "Name",
+      "name": "modulename"
+    }, {
+      "type": "NumberSpinner",
+      "caption": "Anzahl der konfigurierten Quellen",
+      "name": "sourcecount",
+      "minimum": 1,
+      "maximum": 16
+    }
+  ]
+}

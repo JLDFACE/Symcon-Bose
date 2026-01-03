@@ -1,0 +1,11 @@
+{
+  "id": "{69EBE0DC-8DDF-6F4E-E21A-5AC40FAF2050}",
+  "name": "Bose Device",
+  "aliases": [],
+  "type": 2,
+  "vendor": "FACE GmbH",
+  "parentRequirements": ["{79827379-F36E-4ADA-8A95-5F8D1DC92FA9}"],
+  "childRequirements": ["{CCC989DC-BF59-BBFD-C02F-BB7D4D815E68}"],
+  "implemented": ["{018EF6B5-AB94-40C6-AA53-46943E824ACF}", "{E13A162B-3414-BD54-5C48-F802F8323D2B}"],
+  "prefix": "BOSE"
+}

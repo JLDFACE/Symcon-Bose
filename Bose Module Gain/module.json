@@ -1,0 +1,11 @@
+{
+  "id": "{0DDC7159-EF3A-96DE-BF4E-429B90D61616}",
+  "name": "Bose Module Gain",
+  "aliases": [],
+  "type": 3,
+  "vendor": "FACE GmbH",
+  "parentRequirements": ["{E13A162B-3414-BD54-5C48-F802F8323D2B}"],
+  "childRequirements": [],
+  "implemented": ["{CCC989DC-BF59-BBFD-C02F-BB7D4D815E68}"],
+  "prefix": "BOSE"
+}

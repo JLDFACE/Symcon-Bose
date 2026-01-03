@@ -1,0 +1,11 @@
+{
+  "id": "{C8679E38-CBC0-1139-917E-5775F5AE65AA}",
+  "name": "Bose Module SourceSelector",
+  "aliases": [],
+  "type": 3,
+  "vendor": "ITNA GmbH",
+  "parentRequirements": ["{E13A162B-3414-BD54-5C48-F802F8323D2B}"],
+  "childRequirements": [],
+  "implemented": ["{CCC989DC-BF59-BBFD-C02F-BB7D4D815E68}"],
+  "prefix": "BOSE"
+}

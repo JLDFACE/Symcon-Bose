@@ -1,0 +1,12 @@
+{
+  "id": "{2D0210E1-4A9C-E2E4-39D0-4DA36D2D2F61}",
+  "author": "FACE GmbH",
+  "name": "Bose Control",
+  "url": "hhttps://github.com/JLDFACE/Symcon-Bose",
+  "compatibility": {
+    "version": "8.1"
+  },
+  "version": "1.1",
+  "build": 0,
+  "date": 1597586986
+}
