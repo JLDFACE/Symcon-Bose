@@ -3,7 +3,7 @@
   "name": "Bose Module SourceSelector",
   "aliases": [],
   "type": 3,
-  "vendor": "ITNA GmbH",
+  "vendor": "FACE GmbH",
   "parentRequirements": ["{E13A162B-3414-BD54-5C48-F802F8323D2B}"],
   "childRequirements": [],
   "implemented": ["{CCC989DC-BF59-BBFD-C02F-BB7D4D815E68}"],
