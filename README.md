@@ -1,17 +1,20 @@
 # Symcon Bose Control
 
-IP-Symcon Modul zur Steuerung professioneller Bose Audio Prozessoren
-(**Bose ESP880A**, **Bose EX1280**) über Ethernet.
+IP-Symcon Modul zur Steuerung professioneller **Bose Audio Prozessoren**
+über Ethernet, optimiert für den stabilen Dauerbetrieb auf der **SymBox
+(IP-Symcon 8.1)**.
 
-Dieses Modul ist für den stabilen Dauerbetrieb auf der **SymBox (IP-Symcon 8.1)** optimiert und unterstützt
-flüssige Lautstärkefahrten (Gain-Fades) ohne Verbindungsabbrüche oder Performanceprobleme.
+Der Fokus dieses Moduls liegt auf:
+- **extrem flüssigen Gain-Fades (Lautstärken)**
+- stabiler TCP-Kommunikation ohne Reconnect-Thrashing
+- deutlich reduzierter Systemlast durch intelligentes Polling
 
 ---
 
 ## Unterstützte Geräte
 
-- Bose ESP880A
-- Bose EX1280
+- Bose ESP880A  
+- Bose EX1280  
 
 (Weitere ESP/EX-Modelle mit identischem Protokoll sollten ebenfalls funktionieren.)
 
@@ -19,30 +22,30 @@ flüssige Lautstärkefahrten (Gain-Fades) ohne Verbindungsabbrüche oder Perform
 
 ## Modulübersicht
 
-Das Repository enthält folgende Module:
+Dieses Repository enthält folgende Module:
 
-- **Bose Device**  
-  Zentrale Geräteinstanz, verwaltet die TCP/IP-Verbindung zum Bose Prozessor.
+### Bose Device
+Zentrale Geräteinstanz.
+- Verwaltet die TCP/IP-Verbindung zum Bose-Prozessor
+- Zuständig für Online-Status, Grundkommunikation und Senden von Befehlen
 
-- **Bose Module Gain**  
-  Steuerung einzelner Gain-Kanäle (inkl. flüssiger Fades).
+### Bose Module Gain
+- Steuerung einzelner Gain-Kanäle
+- Unterstützt **flüssige Lautstärkefahrten**
+- Statusabfrage bewusst gedrosselt (kein Sekundentakt)
 
-- **Bose Module Source Selector**  
-  Umschaltung von Quellen / Presets.
+### Bose Module SourceSelector
+- Umschaltung von Quellen / Presets
+- Schnelle Statusaktualisierung **nur nach Änderung** (Burst-Polling)
 
 ---
 
 ## Installation
 
-1. In IP-Symcon:
-   - Modulverwaltung → **Repositories**
-   - Repository hinzufügen:
-     ```
-     https://github.com/JLDFACE/Symcon-Bose
-     ```
-
-2. Module installieren
-3. Instanzen wie gewohnt anlegen
+1. IP-Symcon → **Modulverwaltung → Repositories**
+2. Repository hinzufügen:
+3. Module installieren
+4. Instanzen anlegen (Device → Gain / SourceSelector)
 
 ### Hinweis SymBox (Caching)
 Bei Problemen nach Updates:
@@ -52,38 +55,60 @@ Bei Problemen nach Updates:
 
 ---
 
-## Konfiguration
+## Netzwerk & Port-Konfiguration
 
-### Netzwerk / Port
 - Die Verbindung erfolgt über eine **ClientSocket-Instanz**
-- **Port und IP-Adresse bleiben frei konfigurierbar**, da der Port am Bose-Gerät variabel ist
-- Standardmäßig wird eine dauerhafte TCP-Verbindung genutzt
+- **IP-Adresse und Port bleiben frei konfigurierbar**
+- Hintergrund:
+- Der Port kann am Bose-Gerät geändert werden
+- Während der Programmierung über die Bose-Software ist der Port
+ temporär **geschlossen**
 
-### Verhalten bei Bose-Programmierung
-Während der Programmierung über die Bose-Software ist der TCP-Port am Gerät **geschlossen**.
-
-Das Modul erkennt diesen Zustand und:
-- vermeidet aggressive Reconnect-Schleifen
-- belastet die SymBox nicht unnötig
-- nimmt nach Ende der Programmierung automatisch wieder den Betrieb auf
+Das Modul erkennt diesen Zustand und vermeidet aggressive Reconnect-Schleifen.
 
 ---
 
-## Gain-Fades / Lautstärkefahrten
+## Polling-Strategie (Performance-relevant)
+
+Die Statusabfrage ist **bewusst nicht sekündlich**, um die SymBox zu entlasten.
+
+### Aktuelle Polling-Intervalle
+
+- **Device**: alle **30 Sekunden**
+- **Sources**: alle **30 Sekunden**
+- zusätzlich **Burst-Polling (500 ms für 3 Sekunden)** nach einem Source-Wechsel
+- **Gains**: alle **30 Sekunden**
+
+Zusätzlich gilt:
+- Variablen werden **nur bei tatsächlicher Wertänderung** geschrieben
+- Dadurch bleibt die IP-Symcon-Spalte **„Aktualisiert“ ruhig**
+- Keine unnötige Kernel-Last
+
+---
+
+## Gain-Fades / Lautstärken
 
 - Gain-Änderungen werden **ohne künstliche Drosselung** gesendet
-- Solange die Verbindung aktiv ist, werden alle Werte **sofort übertragen**
-- Bei kurzzeitigem Verbindungsverlust wird der **letzte Sollwert gespeichert** und nach Reconnect gesendet
-- Dadurch bleiben Lautstärken konsistent, auch bei Unterbrechungen
+- Der Sendepfad ist vollständig vom Polling entkoppelt
+- Bei aktiver Verbindung werden alle Werte **sofort** übertragen
+- Bei kurzzeitigem Verbindungsverlust:
+- letzter Sollwert wird gespeichert
+- nach Reconnect erneut gesendet („last value wins“)
+
+Damit bleibt die reale Lautstärke konsistent, auch bei Unterbrechungen.
 
 ---
 
-## Technische Hinweise
+## Verhalten bei Bose-Programmierung
 
-- Optimiert für **hohe Command-Raten** (z. B. Fades)
-- Kein Connection-Thrashing (kein permanentes Open/Close)
-- Reconnect-Backoff bei Port-Fehlern
-- SymBox- und Kernel-schonendes Verhalten
+Während der Programmierung über die Bose-Software:
+- ist der TCP-Port des Geräts geschlossen
+- das Modul geht in einen kontrollierten Holdoff-Zustand
+- keine Reconnect-Stürme
+- keine SymBox-Überlastung
+
+Nach Abschluss der Programmierung nimmt das Modul automatisch
+den Betrieb wieder auf.
 
 ---
 
@@ -95,9 +120,9 @@ Das Modul erkennt diesen Zustand und:
 
 ---
 
-## Lizenz / Autor
+## Autor
 
-Autor: **FACE GmbH**
+**FACE GmbH**
 
-Dieses Modul wurde für den professionellen Einsatz in Medien- und Gebäudetechnik entwickelt.
-
+Dieses Modul wurde für den professionellen Einsatz in
+Medien- und Gebäudetechnik entwickelt.
