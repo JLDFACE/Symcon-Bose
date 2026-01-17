@@ -63,6 +63,7 @@ class BoseDevice extends IPSModule
 
         $this->RegisterVariableBoolean("OnlineStatus", "Status", "BoseOnlineStatus", 0);
         $this->RegisterVariableInteger("ParameterSet", "Parameter Set", "BoseParameterSet", 1);
+        $this->RegisterVariableInteger("LastOnline", "Last Online", "~UnixTimestamp", 2);
         $this->EnableAction("ParameterSet");
 
         $this->RegisterTimer("CheckOnlineStatus", 30000, "BOSE_RefreshOnlineStatus(" . $this->InstanceID . ");");
@@ -84,6 +85,24 @@ $this->RegisterTimer("FlushPending", 500, "BOSE_FlushPending(" . $this->Instance
     {
         // Diese Zeile nicht löschen
         parent::ApplyChanges();
+
+        $connId = IPS_GetInstance($this->InstanceID)["ConnectionID"];
+        if (!empty($connId)) {
+            $lastConnId = (int)$this->GetBuffer("LastConnectionID");
+            if ($lastConnId !== (int)$connId) {
+                $this->SetBuffer("LastConnectionID", (string)$connId);
+                $this->SetBuffer("PortInitialized", "0");
+            }
+            $portInitialized = (int)$this->GetBuffer("PortInitialized");
+            $port = IPS_GetProperty($connId, "Port");
+            if ($portInitialized === 0 && (empty($port) || (int)$port === 0)) {
+                IPS_SetProperty($connId, "Port", 10055);
+                IPS_ApplyChanges($connId);
+            }
+            if ($portInitialized === 0) {
+                $this->SetBuffer("PortInitialized", "1");
+            }
+        }
     }
 
     public function Destroy()
@@ -116,6 +135,9 @@ $this->RegisterTimer("FlushPending", 500, "BOSE_FlushPending(" . $this->Instance
         $recentResponse = ($lastResponse > 0 && $lastResponse >= time() - 60);
         $isOnline = $pingOk || $state == 102 || $recentResponse;
         $this->SetValueIfChanged("OnlineStatus", $isOnline);
+        if ($isOnline) {
+            $this->SetValueIfChanged("LastOnline", time());
+        }
         $this->SetBuffer("pingTimeouts", $pingTimeouts);
 
         // Wenn Ping ok ist, aber der Socket inaktiv ist, versuchen wir einen Reconnect.
