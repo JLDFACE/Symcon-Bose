@@ -98,10 +98,12 @@ $this->RegisterTimer("FlushPending", 500, "BOSE_FlushPending(" . $this->Instance
         $pingTimeouts = (int)$this->GetBuffer("pingTimeouts");
         $connId = IPS_GetInstance($this->InstanceID)["ConnectionID"];
         $host = IPS_GetProperty($connId, "Host");
+        $state = IPS_GetInstance($connId)["InstanceStatus"];
+        $pingOk = false;
 
         if (strlen($host) > 0) {
-            $status = Sys_Ping($host, 1000);
-            if ($status) {
+            $pingOk = Sys_Ping($host, 1000);
+            if ($pingOk) {
                 $pingTimeouts = 0;
             } else {
                 $pingTimeouts++;
@@ -110,13 +112,25 @@ $this->RegisterTimer("FlushPending", 500, "BOSE_FlushPending(" . $this->Instance
             $pingTimeouts = 4;
         }
 
-        $isOnline = !($pingTimeouts >= 4);
+        $lastResponse = (int)$this->GetBuffer("LastDeviceResponse");
+        $recentResponse = ($lastResponse > 0 && $lastResponse >= time() - 60);
+        $isOnline = $pingOk || $state == 102 || $recentResponse;
         $this->SetValueIfChanged("OnlineStatus", $isOnline);
         $this->SetBuffer("pingTimeouts", $pingTimeouts);
 
+        // Wenn Ping ok ist, aber der Socket inaktiv ist, versuchen wir einen Reconnect.
+        if ($pingOk && $state == 104) {
+            $backoffUntil = (int)$this->GetBuffer("ReconnectBackoffUntil");
+            if (time() >= $backoffUntil) {
+                IPS_SetProperty($connId, "Open", true);
+                IPS_ApplyChanges($connId);
+                $this->SetBuffer("ReconnectBackoffUntil", time() + 10);
+            }
+        }
+
         // Wenn das Gerät als offline erkannt wird, schließen wir den Socket genau einmal,
         // um unnötige ApplyChanges-Schleifen zu vermeiden.
-        if (!$isOnline) {
+        if (!$isOnline && $pingTimeouts >= 4) {
             $closedByPing = (int)$this->GetBuffer("ClosedByPing");
             if ($closedByPing === 0) {
                 IPS_SetProperty($connId, "Open", false);
