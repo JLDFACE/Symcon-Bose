@@ -224,6 +224,13 @@ $this->RegisterTimer("FlushPending", 500, "BOSE_FlushPending(" . $this->Instance
         if ($isOnline) {
             $this->SetValueIfChanged("LastOnline", time());
         }
+        if ($state == 102) {
+            if ((int)$this->GetBuffer("SubscriptionsApplied") === 0) {
+                $this->ApplySubscriptions();
+            }
+        } else {
+            $this->SetBuffer("SubscriptionsApplied", "0");
+        }
         $this->SetBuffer("pingTimeouts", $pingTimeouts);
 
         // Wenn Ping ok ist, aber der Socket inaktiv ist, versuchen wir einen Reconnect.
