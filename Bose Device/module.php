@@ -30,6 +30,88 @@ class BoseDevice extends IPSModule
         $this->SetValue($ident, $value);
     }
 
+    private function GetSubscriptions()
+    {
+        $raw = (string)$this->GetBuffer("Subscriptions");
+        $list = json_decode($raw, true);
+        return is_array($list) ? $list : [];
+    }
+
+    private function SaveSubscriptions(array $list)
+    {
+        $this->SetBuffer("Subscriptions", json_encode(array_values($list)));
+    }
+
+    private function UpdateSubscriptionsFromCommand($msg)
+    {
+        $trim = trim((string)$msg);
+        if (!preg_match('/^(SUB|UNS)\\s+(.+)$/i', $trim, $matches)) {
+            return;
+        }
+
+        $action = strtoupper($matches[1]);
+        $payload = trim($matches[2]);
+        if (strlen($payload) >= 2 && $payload[0] === '"' && substr($payload, -1) === '"') {
+            $payload = substr($payload, 1, -1);
+        }
+        if ($payload === "") {
+            return;
+        }
+
+        $list = $this->GetSubscriptions();
+        $changed = false;
+        if ($action === "SUB") {
+            if (!in_array($payload, $list, true)) {
+                $list[] = $payload;
+                $changed = true;
+            }
+        } else {
+            $newList = array_values(array_filter($list, function ($item) use ($payload) {
+                return $item !== $payload;
+            }));
+            if (count($newList) !== count($list)) {
+                $list = $newList;
+                $changed = true;
+            }
+        }
+        if ($changed) {
+            $this->SaveSubscriptions($list);
+            $this->SetBuffer("SubscriptionsApplied", "0");
+        }
+    }
+
+    private function ApplySubscriptions()
+    {
+        $list = $this->GetSubscriptions();
+        if (count($list) === 0) {
+            $this->SetBuffer("SubscriptionsApplied", "1");
+            return;
+        }
+
+        $connId = IPS_GetInstance($this->InstanceID)["ConnectionID"];
+        $state = IPS_GetInstance($connId)["InstanceStatus"];
+        if ($state != 102) {
+            return;
+        }
+
+        if (!IPS_SemaphoreEnter("BOSE_SendCommand_" . $this->InstanceID, 2000)) {
+            $this->LogMessage("ApplySubscriptions semaphore timeout.", KL_WARNING);
+            return;
+        }
+
+        try {
+            foreach ($list as $cmd) {
+                $this->SendDataToParent(json_encode([
+                    'DataID' => '{79827379-F36E-4ADA-8A95-5F8D1DC92FA9}',
+                    'Buffer' => utf8_encode('SUB "' . $cmd . "\"\r")
+                ]));
+            }
+            $this->SetBuffer("SubscriptionsApplied", "1");
+        } finally {
+            IPS_SemaphoreLeave("BOSE_SendCommand_" . $this->InstanceID);
+        }
+    }
+
     // Überschreibt die interne IPS_Create($id) Funktion
     public function Create()
     {
@@ -77,6 +159,10 @@ $this->RegisterTimer("FlushPending", 500, "BOSE_FlushPending(" . $this->Instance
         $this->SetBuffer("ClosedByPing", 0);
         $this->SetBuffer("PortHoldoffUntil", 0);
         $this->SetBuffer("PendingCommand", "");
+        $this->SetBuffer("Subscriptions", "[]");
+        $this->SetBuffer("SubscriptionsApplied", "0");
+        $this->SetBuffer("LastConnectionID", "0");
+        $this->SetBuffer("PortInitialized", "0");
 
     }
 
@@ -222,6 +308,8 @@ $this->RegisterTimer("FlushPending", 500, "BOSE_FlushPending(" . $this->Instance
 
     public function SendCommand($msg)
     {
+        $this->UpdateSubscriptionsFromCommand($msg);
+
         if (!$this->GetValue("OnlineStatus")) {
             return false;
         }
@@ -302,6 +390,18 @@ $this->RegisterTimer("FlushPending", 500, "BOSE_FlushPending(" . $this->Instance
     function FlushPending()
     {
         $pending = (string)$this->GetBuffer("PendingCommand");
+
+        $connId = IPS_GetInstance($this->InstanceID)["ConnectionID"];
+        $state = IPS_GetInstance($connId)["InstanceStatus"];
+
+        if ($state == 102) {
+            if ((int)$this->GetBuffer("SubscriptionsApplied") === 0) {
+                $this->ApplySubscriptions();
+            }
+        } else {
+            $this->SetBuffer("SubscriptionsApplied", "0");
+        }
+
         if ($pending === "") {
             return;
         }
@@ -310,9 +410,6 @@ $this->RegisterTimer("FlushPending", 500, "BOSE_FlushPending(" . $this->Instance
         if (time() < $holdoffUntil) {
             return;
         }
-
-        $connId = IPS_GetInstance($this->InstanceID)["ConnectionID"];
-        $state = IPS_GetInstance($connId)["InstanceStatus"];
 
         if ($state == 102) {
             // Sendet genau das zuletzt gepufferte Kommando, damit Fades nicht "stottern".

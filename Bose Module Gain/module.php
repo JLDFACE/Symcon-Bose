@@ -22,6 +22,18 @@ class BoseModuleGain extends IPSModule {
         $this->SetValue($ident, $value);
     }
 
+    private function SetSubscriptions($moduleName, $enable)
+    {
+        if ($moduleName === "") {
+            return;
+        }
+        $cmd1 = 'GA"' . $moduleName . '">1';
+        $cmd2 = 'GA"' . $moduleName . '">2';
+        $prefix = $enable ? 'SUB "' : 'UNS "';
+        $this->SendCommand($prefix . $cmd1 . '"');
+        $this->SendCommand($prefix . $cmd2 . '"');
+    }
+
     // Überschreibt die interne IPS_Create($id) Funktion
     public function Create() {
         // Diese Zeile nicht löschen.
@@ -67,6 +79,7 @@ class BoseModuleGain extends IPSModule {
         $this->EnableAction("LevelPercent");
 
         $this->RegisterPropertyString("modulename", "");
+        $this->SetBuffer("LastModuleName", "");
 
     }
 
@@ -75,6 +88,14 @@ class BoseModuleGain extends IPSModule {
         parent::ApplyChanges();
 
         $this->RegisterTimer("PollGain", 30000, "BOSE_PollGain(" . $this->InstanceID . ");");
+
+        $moduleName = (string)IPS_GetProperty($this->InstanceID, "modulename");
+        $lastModuleName = (string)$this->GetBuffer("LastModuleName");
+        if ($lastModuleName !== $moduleName) {
+            $this->SetSubscriptions($lastModuleName, false);
+            $this->SetSubscriptions($moduleName, true);
+            $this->SetBuffer("LastModuleName", $moduleName);
+        }
     }
 
     public function PollGain()

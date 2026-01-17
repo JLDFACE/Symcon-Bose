@@ -22,6 +22,16 @@ class BoseModuleSourceSelector extends IPSModule {
         $this->SetValue($ident, $value);
     }
 
+    private function SetSubscriptions($moduleName, $enable)
+    {
+        if ($moduleName === "") {
+            return;
+        }
+        $cmd = 'GA"' . $moduleName . '">1';
+        $prefix = $enable ? 'SUB "' : 'UNS "';
+        $this->SendCommand($prefix . $cmd . '"');
+    }
+
     // Überschreibt die interne IPS_Create($id) Funktion
     public function Create() {
         // Diese Zeile nicht löschen.
@@ -46,6 +56,7 @@ class BoseModuleSourceSelector extends IPSModule {
 
         $this->RegisterPropertyString("modulename", "");
         $this->RegisterPropertyInteger("sourcecount", 1);
+        $this->SetBuffer("LastModuleName", "");
 
     }
 
@@ -55,6 +66,14 @@ class BoseModuleSourceSelector extends IPSModule {
 
         $this->RegisterTimer("PollSource", 30000, "BOSE_PollSource(" . $this->InstanceID . ");");
         $this->RegisterTimer("BurstPoll", 0, "BOSE_BurstPoll(" . $this->InstanceID . ");");
+
+        $moduleName = (string)IPS_GetProperty($this->InstanceID, "modulename");
+        $lastModuleName = (string)$this->GetBuffer("LastModuleName");
+        if ($lastModuleName !== $moduleName) {
+            $this->SetSubscriptions($lastModuleName, false);
+            $this->SetSubscriptions($moduleName, true);
+            $this->SetBuffer("LastModuleName", $moduleName);
+        }
     }
 
     public function PollSource()
