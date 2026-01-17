@@ -81,13 +81,14 @@ class BoseModuleGain extends IPSModule {
         $this->RegisterPropertyString("modulename", "");
         $this->SetBuffer("LastModuleName", "");
 
+        $this->RegisterTimer("PollGain", 30000, "BOSE_PollGain(" . $this->InstanceID . ");");
     }
 
     // Überschreibt die intere IPS_ApplyChanges($id) Funktion
     public function ApplyChanges() {
         parent::ApplyChanges();
 
-        $this->RegisterTimer("PollGain", 30000, "BOSE_PollGain(" . $this->InstanceID . ");");
+        $this->SetTimerInterval("PollGain", 30000);
 
         $moduleName = (string)IPS_GetProperty($this->InstanceID, "modulename");
         $lastModuleName = (string)$this->GetBuffer("LastModuleName");

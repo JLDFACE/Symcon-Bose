@@ -58,14 +58,16 @@ class BoseModuleSourceSelector extends IPSModule {
         $this->RegisterPropertyInteger("sourcecount", 1);
         $this->SetBuffer("LastModuleName", "");
 
+        $this->RegisterTimer("PollSource", 30000, "BOSE_PollSource(" . $this->InstanceID . ");");
+        $this->RegisterTimer("BurstPoll", 0, "BOSE_BurstPoll(" . $this->InstanceID . ");");
     }
 
     // Überschreibt die intere IPS_ApplyChanges($id) Funktion
     public function ApplyChanges() {
         parent::ApplyChanges();
 
-        $this->RegisterTimer("PollSource", 30000, "BOSE_PollSource(" . $this->InstanceID . ");");
-        $this->RegisterTimer("BurstPoll", 0, "BOSE_BurstPoll(" . $this->InstanceID . ");");
+        $this->SetTimerInterval("PollSource", 30000);
+        $this->SetTimerInterval("BurstPoll", 0);
 
         $moduleName = (string)IPS_GetProperty($this->InstanceID, "modulename");
         $lastModuleName = (string)$this->GetBuffer("LastModuleName");
