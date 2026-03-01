@@ -159,7 +159,7 @@ $this->RegisterTimer("FlushPending", 500, "BOSE_FlushPending(" . $this->Instance
         $this->SetBuffer("ClosedByPing", 0);
         $this->SetBuffer("PortHoldoffUntil", 0);
         $this->SetBuffer("PendingCommand", "");
-        $this->SetBuffer("LastSentCommand", "");
+        $this->SetBuffer("RecentCommands", "[]");
         $this->SetBuffer("Subscriptions", "[]");
         $this->SetBuffer("SubscriptionsApplied", "0");
         $this->SetBuffer("LastConnectionID", "0");
@@ -345,7 +345,12 @@ $this->RegisterTimer("FlushPending", 500, "BOSE_FlushPending(" . $this->Instance
         try {
             // Aktiv: sofort senden (keine Drosselung, damit Gains flüssig bleiben).
             if ($state == 102) {
-                $this->SetBuffer("LastSentCommand", $msg);
+                $recent = json_decode($this->GetBuffer("RecentCommands"), true) ?: [];
+                $recent[] = $msg;
+                if (count($recent) > 5) {
+                    $recent = array_slice($recent, -5);
+                }
+                $this->SetBuffer("RecentCommands", json_encode($recent));
                 $this->SendDataToParent(json_encode([
                     'DataID' => '{79827379-F36E-4ADA-8A95-5F8D1DC92FA9}',
                     'Buffer' => utf8_encode($msg . "\r")
@@ -498,8 +503,8 @@ $this->RegisterTimer("FlushPending", 500, "BOSE_FlushPending(" . $this->Instance
             }
 
             $errcode = substr($temp, $needlepos + 1, 2);
-            $lastCmd = $this->GetBuffer("LastSentCommand");
-            $this->LogMessage("Command failed. Error: " . $errcode . ". Message: " . self::$errorCodes[$errcode] . " (Last command: " . $lastCmd . ")", KL_ERROR);
+            $recent = json_decode($this->GetBuffer("RecentCommands"), true) ?: [];
+            $this->LogMessage("Command failed. Error: " . $errcode . ". Message: " . self::$errorCodes[$errcode] . " (Recent commands: " . implode(" | ", $recent) . ")", KL_ERROR);
 
             $new = "";
             if ($needlepos != 0)
