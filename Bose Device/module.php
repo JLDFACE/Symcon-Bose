@@ -468,7 +468,7 @@ $this->RegisterTimer("FlushPending", 500, "BOSE_FlushPending(" . $this->Instance
 
         switch ($data["DataID"]) {
             case "{E13A162B-3414-BD54-5C48-F802F8323D2B}":
-                $this->SendCommand($data["Buffer"]);
+                $this->SendCommand(rtrim($data["Buffer"], "\r\n"));
                 break;
         }
     }
