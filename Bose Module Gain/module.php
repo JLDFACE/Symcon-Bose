@@ -20,6 +20,13 @@ class BoseModuleGain extends IPSModule {
             }
         }
         $this->SetValue($ident, $value);
+
+        if ($ident === "LevelPercent") {
+            $statusVarID = (int)$this->ReadPropertyInteger("StatusLevelPercentVarID");
+            if ($statusVarID > 0 && IPS_VariableExists($statusVarID)) {
+                SetValue($statusVarID, (int)$value);
+            }
+        }
     }
 
     private function SetSubscriptions($moduleName, $enable)
@@ -82,6 +89,7 @@ class BoseModuleGain extends IPSModule {
         $this->RegisterPropertyInteger("KnxDirectionVarID", 0);
         $this->RegisterPropertyInteger("KnxMoveVarID", 0);
         $this->RegisterPropertyInteger("KnxStepPercent", 3);
+        $this->RegisterPropertyInteger("StatusLevelPercentVarID", 0);
         $this->SetBuffer("LastModuleName", "");
 
         $this->RegisterTimer("PollGain", 30000, "BOSE_PollGain(" . $this->InstanceID . ");");

@@ -6,6 +6,11 @@
       "name": "modulename"
     },
     {
+      "type": "SelectVariable",
+      "caption": "Statusvariable Level % (optional)",
+      "name": "StatusLevelPercentVarID"
+    },
+    {
       "type": "Label",
       "bold": true,
       "caption": "KNX Dimm relativ (optional)"
