@@ -4,6 +4,28 @@
       "type": "ValidationTextBox",
       "caption": "Name",
       "name": "modulename"
+    },
+    {
+      "type": "Label",
+      "bold": true,
+      "caption": "KNX Dimm relativ (optional)"
+    },
+    {
+      "type": "SelectVariable",
+      "caption": "Richtung (Boolean: true = hoch, false = runter)",
+      "name": "KnxDirectionVarID"
+    },
+    {
+      "type": "SelectVariable",
+      "caption": "Bewegen (Integer: 1 = Start, 0 = Stop)",
+      "name": "KnxMoveVarID"
+    },
+    {
+      "type": "NumberSpinner",
+      "caption": "Schrittgröße (%)",
+      "name": "KnxStepPercent",
+      "minimum": 1,
+      "maximum": 20
     }
   ]
 }

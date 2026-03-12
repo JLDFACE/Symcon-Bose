@@ -79,9 +79,13 @@ class BoseModuleGain extends IPSModule {
         $this->EnableAction("LevelPercent");
 
         $this->RegisterPropertyString("modulename", "");
+        $this->RegisterPropertyInteger("KnxDirectionVarID", 0);
+        $this->RegisterPropertyInteger("KnxMoveVarID", 0);
+        $this->RegisterPropertyInteger("KnxStepPercent", 3);
         $this->SetBuffer("LastModuleName", "");
 
         $this->RegisterTimer("PollGain", 30000, "BOSE_PollGain(" . $this->InstanceID . ");");
+        $this->RegisterTimer("KnxDimTimer", 0, "BOSE_KnxDimStep(" . $this->InstanceID . ");");
     }
 
     // Überschreibt die intere IPS_ApplyChanges($id) Funktion
@@ -89,6 +93,7 @@ class BoseModuleGain extends IPSModule {
         parent::ApplyChanges();
 
         $this->SetTimerInterval("PollGain", 30000);
+        $this->SetTimerInterval("KnxDimTimer", 0);
 
         $moduleName = (string)IPS_GetProperty($this->InstanceID, "modulename");
         $lastModuleName = (string)$this->GetBuffer("LastModuleName");
@@ -96,6 +101,60 @@ class BoseModuleGain extends IPSModule {
             $this->SetSubscriptions($lastModuleName, false);
             $this->SetSubscriptions($moduleName, true);
             $this->SetBuffer("LastModuleName", $moduleName);
+        }
+
+        // Alte VM_UPDATE-Registrierungen entfernen und neu setzen
+        foreach ($this->GetMessageList() as $senderID => $messages) {
+            foreach ($messages as $message) {
+                if ($message == VM_UPDATE) {
+                    $this->UnregisterMessage($senderID, VM_UPDATE);
+                }
+            }
+        }
+        $moveVarID = (int)$this->ReadPropertyInteger("KnxMoveVarID");
+        if ($moveVarID > 0 && IPS_VariableExists($moveVarID)) {
+            $this->RegisterMessage($moveVarID, VM_UPDATE);
+        }
+    }
+
+    public function MessageSink($TimeStamp, $SenderID, $Message, $Data)
+    {
+        if ($Message != VM_UPDATE) {
+            return;
+        }
+
+        $moveVarID = (int)$this->ReadPropertyInteger("KnxMoveVarID");
+        if ($SenderID != $moveVarID) {
+            return;
+        }
+
+        if ((int)GetValueInteger($moveVarID) == 1) {
+            $this->KnxDimStep();
+            $this->SetTimerInterval("KnxDimTimer", 1000);
+        } else {
+            $this->SetTimerInterval("KnxDimTimer", 0);
+        }
+    }
+
+    public function KnxDimStep()
+    {
+        $dirVarID = (int)$this->ReadPropertyInteger("KnxDirectionVarID");
+        $step     = max(1, (int)$this->ReadPropertyInteger("KnxStepPercent"));
+        $goUp     = ($dirVarID > 0 && IPS_VariableExists($dirVarID))
+            ? GetValueBoolean($dirVarID)
+            : true;
+
+        $current  = (int)$this->GetValue("LevelPercent");
+        $newLevel = max(0, min(100, $current + ($goUp ? $step : -$step)));
+
+        if ($newLevel !== $current) {
+            $this->SetLevelPercent($newLevel);
+            $this->SetValueIfChanged("LevelPercent", $newLevel);
+            $this->SetValueIfChanged("Level", round(-60.5 + 60.5 * ($newLevel / 100.0), 1));
+        }
+
+        if ($newLevel <= 0 || $newLevel >= 100) {
+            $this->SetTimerInterval("KnxDimTimer", 0);
         }
     }
 
