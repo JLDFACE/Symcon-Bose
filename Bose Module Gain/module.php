@@ -24,10 +24,7 @@ class BoseModuleGain extends IPSModule {
         if ($ident === "LevelPercent") {
             $statusVarID = (int)$this->ReadPropertyInteger("StatusLevelPercentVarID");
             if ($statusVarID > 0 && IPS_VariableExists($statusVarID)) {
-                $varInfo = IPS_GetVariable($statusVarID);
-                if (!$varInfo['VariableUnchangeable']) {
-                    SetValue($statusVarID, (int)$value);
-                }
+                RequestAction($statusVarID, (int)$value);
             }
         }
     }
