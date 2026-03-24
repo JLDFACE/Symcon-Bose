@@ -103,7 +103,7 @@ class BoseModuleGain extends IPSModule {
         $this->SetTimerInterval("PollGain", 30000);
         $this->SetTimerInterval("KnxDimTimer", 0);
 
-        $moduleName = (string)IPS_GetProperty($this->InstanceID, "modulename");
+        $moduleName = (string)$this->ReadPropertyString("modulename");
         $lastModuleName = (string)$this->GetBuffer("LastModuleName");
         if ($lastModuleName !== $moduleName) {
             $this->SetSubscriptions($lastModuleName, false);
@@ -168,7 +168,7 @@ class BoseModuleGain extends IPSModule {
 
     public function PollGain()
     {
-        $module = IPS_GetProperty($this->InstanceID, "modulename");
+        $module = $this->ReadPropertyString("modulename");
         if (strlen($module) == 0) {
             return;
         }
@@ -185,7 +185,7 @@ class BoseModuleGain extends IPSModule {
             return false;
         }
 
-        $this->SendCommand('SA"' . IPS_GetProperty($this->InstanceID, "modulename") . '">1=' . round($level, 1));
+        $this->SendCommand('SA"' . $this->ReadPropertyString("modulename") . '">1=' . round($level, 1));
         return true;
     }
 
@@ -199,7 +199,7 @@ class BoseModuleGain extends IPSModule {
     }
 
     public function SetActive($active) {
-        $this->SendCommand('SA"' . IPS_GetProperty($this->InstanceID, "modulename") . '">2=' . (($active) ? 'F' : 'O'));
+        $this->SendCommand('SA"' . $this->ReadPropertyString("modulename") . '">2=' . (($active) ? 'F' : 'O'));
     }
 
     public function SendCommand($msg) {
@@ -215,7 +215,7 @@ class BoseModuleGain extends IPSModule {
         $data = $data["Buffer"];
 
         // Check if module name equals instance module name
-        if (IPS_GetProperty($this->InstanceID, "modulename") != $data["moduleName"])
+        if ($this->ReadPropertyString("modulename") != $data["moduleName"])
             return;
 
         // Check index ranges

@@ -69,7 +69,7 @@ class BoseModuleSourceSelector extends IPSModule {
         $this->SetTimerInterval("PollSource", 30000);
         $this->SetTimerInterval("BurstPoll", 0);
 
-        $moduleName = (string)IPS_GetProperty($this->InstanceID, "modulename");
+        $moduleName = (string)$this->ReadPropertyString("modulename");
         $lastModuleName = (string)$this->GetBuffer("LastModuleName");
         if ($lastModuleName !== $moduleName) {
             $this->SetSubscriptions($lastModuleName, false);
@@ -80,7 +80,7 @@ class BoseModuleSourceSelector extends IPSModule {
 
     public function PollSource()
     {
-        $module = IPS_GetProperty($this->InstanceID, "modulename");
+        $module = $this->ReadPropertyString("modulename");
         if (strlen($module) == 0) {
             return;
         }
@@ -108,12 +108,12 @@ class BoseModuleSourceSelector extends IPSModule {
 
 
     public function SetSource($source) {
-        if ($source < 1 || $source > intval(IPS_GetProperty($this->InstanceID, "sourcecount"))) {
-            echo("Dieses Modul besitzt nur " . IPS_GetProperty($this->InstanceID, "sourcecount") . " Eingänge.");
+        if ($source < 1 || $source > intval($this->ReadPropertyInteger("sourcecount"))) {
+            echo("Dieses Modul besitzt nur " . $this->ReadPropertyInteger("sourcecount") . " Eingänge.");
             return false;
         }
 
-        $this->SendCommand('SA"' . IPS_GetProperty($this->InstanceID, "modulename") . '">1=' . $source);
+        $this->SendCommand('SA"' . $this->ReadPropertyString("modulename") . '">1=' . $source);
     
         $this->StartBurstPolling(3);
 }
@@ -131,7 +131,7 @@ class BoseModuleSourceSelector extends IPSModule {
         $data = $data["Buffer"];
 
         // Check if module name equals instance module name
-        if (IPS_GetProperty($this->InstanceID, "modulename") != $data["moduleName"])
+        if ($this->ReadPropertyString("modulename") != $data["moduleName"])
             return;
 
         // Check index ranges
