@@ -205,7 +205,7 @@ class BoseModuleGain extends IPSModule {
     public function SendCommand($msg) {
         $this->SendDataToParent(json_encode([
             'DataID' => '{E13A162B-3414-BD54-5C48-F802F8323D2B}',
-            'Buffer' => utf8_encode($msg . "\r")
+            'Buffer' => $msg . "\r"
         ]));
     }
 

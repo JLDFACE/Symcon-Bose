@@ -103,7 +103,7 @@ class BoseDevice extends IPSModule
             foreach ($list as $cmd) {
                 $this->SendDataToParent(json_encode([
                     'DataID' => '{79827379-F36E-4ADA-8A95-5F8D1DC92FA9}',
-                    'Buffer' => utf8_encode('SUB "' . $cmd . "\"\r")
+                    'Buffer' => 'SUB "' . $cmd . "\"\r"
                 ]));
             }
             $this->SetBuffer("SubscriptionsApplied", "1");
@@ -353,7 +353,7 @@ $this->RegisterTimer("FlushPending", 500, "BOSE_FlushPending(" . $this->Instance
                 $this->SetBuffer("RecentCommands", json_encode($recent));
                 $this->SendDataToParent(json_encode([
                     'DataID' => '{79827379-F36E-4ADA-8A95-5F8D1DC92FA9}',
-                    'Buffer' => utf8_encode($msg . "\r")
+                    'Buffer' => $msg . "\r"
                 ]));
                 return true;
             }
@@ -486,9 +486,9 @@ $this->RegisterTimer("FlushPending", 500, "BOSE_FlushPending(" . $this->Instance
     private function handleSocketInput($data)
     {
         $temp = $this->GetBuffer("incomingData");
-        $temp .= utf8_decode($data['Buffer']);
+        $temp .= $data['Buffer'];
 
-        $data["hexBuffer"] = bin2hex(utf8_decode($data['Buffer']));
+        $data["hexBuffer"] = bin2hex($data['Buffer']);
         $data["tempVariable"] = $temp;
 
         // Im Meldungsfenster zu Debug zwecken ausgeben
