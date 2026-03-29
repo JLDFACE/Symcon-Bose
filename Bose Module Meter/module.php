@@ -10,6 +10,12 @@ class BoseModuleMeter extends IPSModule
 
         $this->ConnectParent("{69EBE0DC-8DDF-6F4E-E21A-5AC40FAF2050}");
 
+        if (!IPS_VariableProfileExists('BoseSignalStatus')) {
+            IPS_CreateVariableProfile('BoseSignalStatus', 0);
+        }
+        IPS_SetVariableProfileAssociation('BoseSignalStatus', false, 'Kein Signal', 'Warning', 0xff4444);
+        IPS_SetVariableProfileAssociation('BoseSignalStatus', true,  'Signal',      'Ok',      0x00cc44);
+
         $this->RegisterPropertyString('MeterChannels', '[]');
         $this->RegisterPropertyInteger('YellowThreshold', -24);
         $this->RegisterPropertyInteger('RedThreshold', -10);
@@ -17,7 +23,6 @@ class BoseModuleMeter extends IPSModule
         $this->RegisterPropertyInteger('BackgroundColor', 0x1a1a2e);
         $this->RegisterPropertyInteger('BackgroundOpacity', 100);
         $this->RegisterPropertyInteger('BarWidth', 32);
-        $this->RegisterPropertyInteger('SignalThreshold', -50);
 
         // Poll GL every 100 ms, accumulate samples
         $this->RegisterTimer('GlPoll', 0, 'BOSE_PollGl(' . $this->InstanceID . ');');
@@ -47,8 +52,16 @@ class BoseModuleMeter extends IPSModule
         foreach ($channels as $ch) {
             $pos   = (int)$ch['Position'];
             $label = (string)$ch['Label'] !== '' ? (string)$ch['Label'] : 'Slot ' . $ch['Slot'] . ' Ch ' . $ch['Channel'];
-            $this->MaintainVariable('Level_'  . $pos, $label,            VARIABLETYPE_FLOAT,   'BoseGainLevelDB', $pos * 2 + 1, true);
-            $this->MaintainVariable('Signal_' . $pos, $label . ' Signal', VARIABLETYPE_BOOLEAN, '~Switch',         $pos * 2 + 2, true);
+            $this->MaintainVariable('Level_'  . $pos, $label,             VARIABLETYPE_FLOAT,   'BoseGainLevelDB',  $pos * 2 + 1, true);
+            $this->MaintainVariable('Signal_' . $pos, $label . ' Signal', VARIABLETYPE_BOOLEAN, 'BoseSignalStatus', $pos * 2 + 2, true);
+            // Disable archive logging for Level variable (updates every second → floods log)
+            $lvlID = $this->GetIDForIdent('Level_' . $pos);
+            if ($lvlID > 0) {
+                $archiveID = @IPS_GetInstanceIDByModuleID('{43192F0B-135B-4CE7-A0A7-1475603F3060}');
+                if ($archiveID > 0) {
+                    AC_SetLoggingStatus($archiveID, $lvlID, false);
+                }
+            }
         }
 
         $this->SetTimerInterval('GlPoll', 100);
@@ -133,9 +146,10 @@ class BoseModuleMeter extends IPSModule
                 $averages[$key] = isset($lastAvg[$key]) ? (float)$lastAvg[$key] : -60.0;
             }
             // Write level + signal variables
-            $pos = (int)$ch['Position'];
+            $pos       = (int)$ch['Position'];
+            $threshold = isset($ch['Threshold']) ? (int)$ch['Threshold'] : -50;
             $this->SetValueIfChanged('Level_'  . $pos, $averages[$key]);
-            $this->SetValueIfChanged('Signal_' . $pos, $averages[$key] > (int)$this->ReadPropertyInteger('SignalThreshold'));
+            $this->SetValueIfChanged('Signal_' . $pos, $averages[$key] > $threshold);
         }
 
         // Reset sample buffer for next second

@@ -62,6 +62,17 @@
                             "edit": {
                                 "type": "ValidationTextBox"
                             }
+                        },
+                        {
+                            "name": "Threshold",
+                            "caption": "Schwelle (dB)",
+                            "width": "100px",
+                            "add": -50,
+                            "edit": {
+                                "type": "NumberSpinner",
+                                "minimum": -60,
+                                "maximum": 0
+                            }
                         }
                     ],
                     "values": []
@@ -111,14 +122,6 @@
                     "minimum": 8,
                     "maximum": 80,
                     "suffix": " px"
-                },
-                {
-                    "type": "NumberSpinner",
-                    "name": "SignalThreshold",
-                    "caption": "Signal-Schwelle (dB)",
-                    "minimum": -60,
-                    "maximum": 0,
-                    "suffix": " dB"
                 },
                 {
                     "type": "SelectColor",
