@@ -177,24 +177,30 @@ class BoseModuleMeter extends IPSModule
         $opacity = max(0, min(100, (int)$this->ReadPropertyInteger('BackgroundOpacity'))) / 100.0;
         $bgColor = sprintf('rgba(%d,%d,%d,%.2f)', ($bgInt >> 16) & 0xFF, ($bgInt >> 8) & 0xFF, $bgInt & 0xFF, $opacity);
 
-        $html = $this->BuildMeterHTML($channels, $levels, $peaks, $prevDisplay, $yellowDb, $redDb, $height, $interval, $bgColor);
-        $this->SetValueIfChanged('LevelMeter', $html);
+        // Ballistic display values: instant attack, linear dB decay (10 dB/s)
+        $decayPerTick = 10.0 * $interval / 1000.0;
+        $displayLevels = [];
+        foreach ($channels as $ch) {
+            $key = (int)$ch['Slot'] . ':' . (int)$ch['Channel'];
+            $real = isset($levels[$key]) ? (float)$levels[$key] : -60.0;
+            $prev = isset($prevDisplay[$key]) ? (float)$prevDisplay[$key] : $real;
+            $displayLevels[$key] = $real >= $prev ? $real : max($real, $prev - $decayPerTick);
+        }
+        $this->SetBuffer('PrevDisplayLevels', json_encode($displayLevels));
 
-        // Save current levels as start point for next interpolation
-        $this->SetBuffer('PrevDisplayLevels', json_encode($levels));
+        $html = $this->BuildMeterHTML($channels, $displayLevels, $peaks, $yellowDb, $redDb, $height, $bgColor);
+        $this->SetValueIfChanged('LevelMeter', $html);
     }
 
-    private function BuildMeterHTML(array $channels, array $levels, array $peaks, array $prevDisplay, $yellowDb, $redDb, $height, $interval, $bgColor)
+    private function BuildMeterHTML(array $channels, array $displayLevels, array $peaks, $yellowDb, $redDb, $height, $bgColor)
     {
         $meterData = [];
         foreach ($channels as $ch) {
             $key = (int)$ch['Slot'] . ':' . (int)$ch['Channel'];
             $label = (string)$ch['Label'] !== '' ? (string)$ch['Label'] : 'S' . $ch['Slot'] . 'C' . $ch['Channel'];
-            $cur = isset($levels[$key]) ? (float)$levels[$key] : -60.0;
             $meterData[] = [
                 'label' => $label,
-                'db'    => $cur,
-                'prev'  => isset($prevDisplay[$key]) ? (float)$prevDisplay[$key] : $cur,
+                'db'    => isset($displayLevels[$key]) ? (float)$displayLevels[$key] : -60.0,
                 'peak'  => isset($peaks[$key]) ? (float)$peaks[$key] : -60.0,
             ];
         }
@@ -208,7 +214,6 @@ class BoseModuleMeter extends IPSModule
             . 'var YELLOW_DB=' . $yellowDb . ';'
             . 'var RED_DB=' . $redDb . ';'
             . 'var H=' . $height . ';'
-            . 'var DURATION=' . $interval . ';'
             . 'var DB_MIN=-60,DB_MAX=0;'
             . 'var GAP=10,PAD_LEFT=36,PAD_TOP=16,PAD_BOTTOM=40;'
             . 'var W_MIN=20,W_MAX=60;'
@@ -243,7 +248,7 @@ class BoseModuleMeter extends IPSModule
             . 'ctx.fillText(scaleVals[s].toString(),PAD_LEFT-8,sy+3);}'
             . 'for(var i=0;i<DATA.length;i++){'
             . 'var m=DATA[i];var x=PAD_LEFT+i*(W+GAP);var base=PAD_TOP+H;'
-            . 'var dv=m.disp!==undefined?m.disp:m.db;'
+            . 'var dv=m.db;'
             . 'ctx.fillStyle=COL_BG;ctx.strokeStyle=COL_BORDER;ctx.lineWidth=1;'
             . 'ctx.fillRect(x,PAD_TOP,W,H);ctx.strokeRect(x-0.5,PAD_TOP-0.5,W+1,H+1);'
             . 'drawBar(x,dbToY(dv),W);'
@@ -259,15 +264,7 @@ class BoseModuleMeter extends IPSModule
             . 'ctx.fillText(dbText,x+W/2,base+14);'
             . 'ctx.fillStyle=COL_TEXT;ctx.font=\'10px sans-serif\';'
             . 'ctx.fillText(m.label,x+W/2,base+28);}}'
-            . 'var startTime=null;'
-            . 'function animate(ts){'
-            . 'if(!startTime)startTime=ts;'
-            . 'var t=Math.min(1,(ts-startTime)/DURATION);'
-            . 'var e=1-Math.pow(1-t,3);'
-            . 'for(var i=0;i<DATA.length;i++){DATA[i].disp=DATA[i].prev+(DATA[i].db-DATA[i].prev)*e;}'
             . 'draw();'
-            . 'if(t<1)requestAnimationFrame(animate);}'
-            . 'requestAnimationFrame(animate);'
             . '})();</script></div>';
 
         return $html;
