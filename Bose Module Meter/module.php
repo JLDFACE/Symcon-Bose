@@ -88,7 +88,20 @@ class BoseModuleMeter extends IPSModule
 
     public function UpdateMeterHTML()
     {
+        $this->PollMeters();
         $this->RenderAndSetHTML();
+    }
+
+    private function PollMeters()
+    {
+        $channels = $this->GetMeterChannels();
+        foreach ($channels as $ch) {
+            $nodeName = (string)$ch['NodeName'];
+            $index = (int)$ch['Index'];
+            $cmd = 'GA"' . $nodeName . '">' . $index;
+            $this->SendCommand($cmd);
+            $this->SendDebug('Meter.Poll', $cmd, 0);
+        }
     }
 
     // ── Private: Protocol ─────────────────────────────────────
