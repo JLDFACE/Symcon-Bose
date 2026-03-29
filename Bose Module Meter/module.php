@@ -57,8 +57,11 @@ class BoseModuleMeter extends IPSModule
 
     public function ReceiveData($JSONString)
     {
+        $this->SendDebug('Meter.RawReceive', $JSONString, 0);
+
         $data = json_decode($JSONString, true);
         if (!isset($data['Buffer']) || !is_array($data['Buffer'])) {
+            $this->SendDebug('Meter.RawReceive', 'Buffer fehlt oder kein Array', 0);
             return;
         }
 
@@ -66,6 +69,8 @@ class BoseModuleMeter extends IPSModule
         $moduleName = (string)$buffer['moduleName'];
         $index1 = (int)$buffer['Index1'];
         $value = (float)$buffer['Value'];
+
+        $this->SendDebug('Meter.Parsed', 'moduleName=' . $moduleName . ' index=' . $index1 . ' value=' . $value, 0);
 
         // Check if this message matches any of our configured channels
         $channels = $this->GetMeterChannels();
@@ -76,6 +81,7 @@ class BoseModuleMeter extends IPSModule
                 return;
             }
         }
+        $this->SendDebug('Meter.NoMatch', 'moduleName=' . $moduleName . ' passt zu keinem Kanal', 0);
     }
 
     // ── Public functions ──────────────────────────────────────
