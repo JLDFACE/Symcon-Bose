@@ -18,7 +18,7 @@ class BoseModuleMeter extends IPSModule
         $this->RegisterPropertyInteger('RedThreshold', -10);
         $this->RegisterPropertyInteger('MeterHeight', 180);
         $this->RegisterPropertyInteger('UpdateInterval', 200);
-        $this->RegisterPropertyString('BackgroundColor', '#1a1a2e');
+        $this->RegisterPropertyInteger('BackgroundColor', 0x1a1a2e);
 
         // Timer: poll GL + render HTML
         $this->RegisterTimer('MeterUpdate', 0, 'BOSE_UpdateMeterHTML(' . $this->InstanceID . ');');
@@ -168,7 +168,7 @@ class BoseModuleMeter extends IPSModule
         $yellowDb = (int)$this->ReadPropertyInteger('YellowThreshold');
         $redDb = (int)$this->ReadPropertyInteger('RedThreshold');
         $height = (int)$this->ReadPropertyInteger('MeterHeight');
-        $bgColor = (string)$this->ReadPropertyString('BackgroundColor');
+        $bgColor = sprintf('#%06x', (int)$this->ReadPropertyInteger('BackgroundColor') & 0xFFFFFF);
 
         $html = $this->BuildMeterHTML($channels, $levels, $peaks, $yellowDb, $redDb, $height, $bgColor);
         $this->SetValueIfChanged('LevelMeter', $html);

@@ -105,9 +105,9 @@
                     "suffix": " ms"
                 },
                 {
-                    "type": "ValidationTextBox",
+                    "type": "SelectColor",
                     "name": "BackgroundColor",
-                    "caption": "Hintergrundfarbe (CSS)"
+                    "caption": "Hintergrundfarbe"
                 }
             ]
         }
