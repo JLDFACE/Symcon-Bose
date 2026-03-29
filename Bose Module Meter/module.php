@@ -242,7 +242,7 @@ class BoseModuleMeter extends IPSModule
             . 'var scaleVals=[0,RED_DB,YELLOW_DB,-40,-60];'
             . 'for(var i=0;i<scaleVals.length;i++){'
             . 'var sy=PAD_TOP+H-dbToY(scaleVals[i]);'
-            . 'ctx.fillStyle=scaleVals[i]>=RED_DB?\'#ff174466\':(scaleVals[i]>=YELLOW_DB?\'#ffd60066\':\'#44445e\');'
+            . 'ctx.fillStyle=\'#44445e\';'
             . 'ctx.fillText(scaleVals[i].toString(),PAD_LEFT-8,sy+3);}}'
             . 'function drawMeter(dv,m,x){'
             . 'var base=PAD_TOP+H;'
