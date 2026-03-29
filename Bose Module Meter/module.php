@@ -202,7 +202,7 @@ class BoseModuleMeter extends IPSModule
             . 'var DURATION=950;'
             . 'var DB_MIN=-60,DB_MAX=0;'
             . 'var GAP=10,PAD_LEFT=36,PAD_TOP=16,PAD_BOTTOM=40;'
-            . 'var W_MIN=20,W_MAX=60;'
+            . 'var W_MIN=12,W_MAX=32;'
             . 'var COL_GREEN=\'#00c853\',COL_YELLOW=\'#ffd600\',COL_RED=\'#ff1744\';'
             . 'var COL_BG=\'#0a0a1e\',COL_BORDER=\'#1e1e3a\',COL_TEXT=\'#9999bb\',COL_DB=\'#ccccee\',COL_ROOT=\'' . addslashes($bgColor) . '\';'
             . 'var DPR=window.devicePixelRatio||1;'
