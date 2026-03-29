@@ -108,6 +108,14 @@
                     "type": "SelectColor",
                     "name": "BackgroundColor",
                     "caption": "Hintergrundfarbe"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "BackgroundOpacity",
+                    "caption": "Deckkraft",
+                    "minimum": 0,
+                    "maximum": 100,
+                    "suffix": " %"
                 }
             ]
         }
