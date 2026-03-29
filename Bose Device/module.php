@@ -571,6 +571,25 @@ $this->RegisterTimer("FlushPending", 500, "BOSE_FlushPending(" . $this->Instance
                         "DataID" => "{CCC989DC-BF59-BBFD-C02F-BB7D4D815E68}",
                         "Buffer" => $data
                     ]));
+                } else if (substr($cmd, 0, 2) == "GL") {
+                    // GL s [h1,h2,...] — Get Signal Level response
+                    if (preg_match('/^GL\s+(\d+)\s+\[([^\]]+)\]/', $cmd, $m)) {
+                        $slot = (int)$m[1];
+                        $hexVals = array_map('trim', explode(',', $m[2]));
+                        $levels = [];
+                        foreach ($hexVals as $hex) {
+                            $dec = hexdec($hex);
+                            $levels[] = round(($dec / 2) - 60, 1);
+                        }
+                        $this->SendDataToChildren(json_encode([
+                            "DataID" => "{CCC989DC-BF59-BBFD-C02F-BB7D4D815E68}",
+                            "Buffer" => [
+                                "command" => "GL",
+                                "slot"    => $slot,
+                                "levels"  => $levels
+                            ]
+                        ]));
+                    }
                 }
             }
 

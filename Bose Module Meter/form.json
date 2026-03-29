@@ -6,6 +6,10 @@
             "expanded": true,
             "items": [
                 {
+                    "type": "Label",
+                    "caption": "EX-1280: Slot 1 = Out 1-4 | Slot 2 = Out 5-8 | Slot 3 = In 1-4 | Slot 4 = In 5-8"
+                },
+                {
                     "type": "List",
                     "name": "MeterChannels",
                     "caption": "",
@@ -29,32 +33,34 @@
                             }
                         },
                         {
-                            "name": "NodeName",
-                            "caption": "Meter Node-Name (aus CSD)",
-                            "width": "auto",
-                            "add": "",
-                            "edit": {
-                                "type": "ValidationTextBox"
-                            }
-                        },
-                        {
-                            "name": "Label",
-                            "caption": "Anzeige-Label",
-                            "width": "120px",
-                            "add": "",
-                            "edit": {
-                                "type": "ValidationTextBox"
-                            }
-                        },
-                        {
-                            "name": "Index",
-                            "caption": "Index",
+                            "name": "Slot",
+                            "caption": "Slot",
                             "width": "60px",
                             "add": 1,
                             "edit": {
                                 "type": "NumberSpinner",
                                 "minimum": 1,
-                                "maximum": 64
+                                "maximum": 8
+                            }
+                        },
+                        {
+                            "name": "Channel",
+                            "caption": "Kanal",
+                            "width": "60px",
+                            "add": 1,
+                            "edit": {
+                                "type": "NumberSpinner",
+                                "minimum": 1,
+                                "maximum": 8
+                            }
+                        },
+                        {
+                            "name": "Label",
+                            "caption": "Anzeige-Label",
+                            "width": "auto",
+                            "add": "",
+                            "edit": {
+                                "type": "ValidationTextBox"
                             }
                         }
                     ],
@@ -93,8 +99,8 @@
                 {
                     "type": "NumberSpinner",
                     "name": "UpdateInterval",
-                    "caption": "HTML-Update Intervall",
-                    "minimum": 200,
+                    "caption": "Poll-Intervall",
+                    "minimum": 100,
                     "maximum": 5000,
                     "suffix": " ms"
                 }

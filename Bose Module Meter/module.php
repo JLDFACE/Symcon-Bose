@@ -10,19 +10,19 @@ class BoseModuleMeter extends IPSModule
 
         $this->ConnectParent("{69EBE0DC-8DDF-6F4E-E21A-5AC40FAF2050}");
 
-        // Meter channel list: [{Position, NodeName, Label, Index}]
+        // Meter channel list: [{Position, Slot, Channel, Label}]
         $this->RegisterPropertyString('MeterChannels', '[]');
 
         // Display settings
         $this->RegisterPropertyInteger('YellowThreshold', -24);
         $this->RegisterPropertyInteger('RedThreshold', -10);
         $this->RegisterPropertyInteger('MeterHeight', 180);
-        $this->RegisterPropertyInteger('UpdateInterval', 500);
+        $this->RegisterPropertyInteger('UpdateInterval', 200);
 
-        // Timer for periodic HTML rewrite
+        // Timer: poll GL + render HTML
         $this->RegisterTimer('MeterUpdate', 0, 'BOSE_UpdateMeterHTML(' . $this->InstanceID . ');');
 
-        // Buffer for current meter levels, keyed by "NodeName>Index"
+        // Buffer for current meter levels, keyed by "slot:channel"
         $this->SetBuffer('MeterLevels', '{}');
         $this->SetBuffer('PeakLevels', '{}');
     }
@@ -44,19 +44,14 @@ class BoseModuleMeter extends IPSModule
         // Float variable per channel
         foreach ($channels as $ch) {
             $ident = 'Level_' . (int)$ch['Position'];
-            $label = (string)$ch['Label'] !== '' ? (string)$ch['Label'] : (string)$ch['NodeName'];
+            $label = (string)$ch['Label'] !== '' ? (string)$ch['Label'] : 'Slot ' . $ch['Slot'] . ' Ch ' . $ch['Channel'];
             $this->MaintainVariable($ident, $label, VARIABLETYPE_FLOAT, 'BoseGainLevelDB', (int)$ch['Position'] + 1, true);
         }
 
-        if ($this->HasActiveParent()) {
-            $this->SubscribeMeters($channels);
-        }
-
         $interval = (int)$this->ReadPropertyInteger('UpdateInterval');
-        $this->SetTimerInterval('MeterUpdate', max(200, $interval));
+        $this->SetTimerInterval('MeterUpdate', max(100, $interval));
 
         $this->RenderAndSetHTML();
-
         $this->SetStatus(102);
     }
 
@@ -64,33 +59,37 @@ class BoseModuleMeter extends IPSModule
 
     public function ReceiveData($JSONString)
     {
-        $this->SendDebug('Meter.RawReceive', $JSONString, 0);
-
         $data = json_decode($JSONString, true);
         if (!isset($data['Buffer']) || !is_array($data['Buffer'])) {
-            $this->SendDebug('Meter.RawReceive', 'Buffer fehlt oder kein Array', 0);
             return;
         }
 
         $buffer = $data['Buffer'];
-        $moduleName = (string)$buffer['moduleName'];
-        $index1 = (int)$buffer['Index1'];
-        $value = (float)$buffer['Value'];
 
-        $this->SendDebug('Meter.Parsed', 'moduleName=' . $moduleName . ' index=' . $index1 . ' value=' . $value, 0);
+        // Only handle GL responses
+        if (!isset($buffer['command']) || $buffer['command'] !== 'GL') {
+            return;
+        }
 
-        // Check if this message matches any of our configured channels
+        $slot = (int)$buffer['slot'];
+        $levels = $buffer['levels'];
+
+        $this->SendDebug('Meter.GL', 'slot=' . $slot . ' levels=' . json_encode($levels), 0);
+
         $channels = $this->GetMeterChannels();
         foreach ($channels as $ch) {
-            if ((string)$ch['NodeName'] === $moduleName && (int)$ch['Index'] === $index1) {
-                $this->SendDebug('Meter.Receive', $moduleName . '>' . $index1 . '=' . $value, 0);
-                $this->UpdateMeterLevel($moduleName, $index1, $value);
-                $ident = 'Level_' . (int)$ch['Position'];
-                $this->SetValueIfChanged($ident, $value);
-                return;
+            if ((int)$ch['Slot'] === $slot) {
+                $chNum = (int)$ch['Channel'];
+                $idx = $chNum - 1;
+                if (isset($levels[$idx])) {
+                    $db = (float)$levels[$idx];
+                    $key = $slot . ':' . $chNum;
+                    $this->UpdateMeterLevel($key, $db);
+                    $ident = 'Level_' . (int)$ch['Position'];
+                    $this->SetValueIfChanged($ident, $db);
+                }
             }
         }
-        $this->SendDebug('Meter.NoMatch', 'moduleName=' . $moduleName . ' passt zu keinem Kanal', 0);
     }
 
     // ── Public functions ──────────────────────────────────────
@@ -101,42 +100,23 @@ class BoseModuleMeter extends IPSModule
         $this->RenderAndSetHTML();
     }
 
+    // ── Private: Protocol ─────────────────────────────────────
+
     private function PollMeters()
     {
-        $channels = $this->GetMeterChannels();
-        foreach ($channels as $ch) {
-            $nodeName = (string)$ch['NodeName'];
-            $index = (int)$ch['Index'];
-            $cmd = 'GA"' . $nodeName . '">' . $index;
+        // Collect unique slots and poll each once
+        $slots = [];
+        foreach ($this->GetMeterChannels() as $ch) {
+            $slots[(int)$ch['Slot']] = true;
+        }
+        foreach (array_keys($slots) as $slot) {
+            $cmd = 'GL ' . $slot;
             $this->SendCommand($cmd);
             $this->SendDebug('Meter.Poll', $cmd, 0);
         }
     }
 
-    // ── Private: Protocol ─────────────────────────────────────
-
-    private function SubscribeMeters(array $channels)
-    {
-        foreach ($channels as $ch) {
-            $nodeName = (string)$ch['NodeName'];
-            $index = (int)$ch['Index'];
-            $cmd = 'SUB "GA"' . $nodeName . '">' . $index . '"';
-            $this->SendCommand($cmd);
-            $this->SendDebug('Meter.Subscribe', $cmd, 0);
-        }
-    }
-
-    private function UnsubscribeMeters(array $channels)
-    {
-        foreach ($channels as $ch) {
-            $nodeName = (string)$ch['NodeName'];
-            $index = (int)$ch['Index'];
-            $cmd = 'UNS "GA"' . $nodeName . '">' . $index . '"';
-            $this->SendCommand($cmd);
-        }
-    }
-
-    private function SendCommand($msg)
+    private function SendCommand(string $msg)
     {
         $this->SendDataToParent(json_encode([
             'DataID' => '{E13A162B-3414-BD54-5C48-F802F8323D2B}',
@@ -146,10 +126,8 @@ class BoseModuleMeter extends IPSModule
 
     // ── Private: State Management ─────────────────────────────
 
-    private function UpdateMeterLevel($nodeName, $index, $db)
+    private function UpdateMeterLevel(string $key, float $db)
     {
-        $key = $nodeName . '>' . $index;
-
         $levels = json_decode($this->GetBuffer('MeterLevels'), true);
         if (!is_array($levels)) $levels = [];
         $levels[$key] = round($db, 1);
@@ -157,7 +135,7 @@ class BoseModuleMeter extends IPSModule
 
         $peaks = json_decode($this->GetBuffer('PeakLevels'), true);
         if (!is_array($peaks)) $peaks = [];
-        $currentPeak = isset($peaks[$key]) ? (float)$peaks[$key] : -80.0;
+        $currentPeak = isset($peaks[$key]) ? (float)$peaks[$key] : -60.0;
         if ($db > $currentPeak) {
             $peaks[$key] = round($db, 1);
         } else {
@@ -198,13 +176,12 @@ class BoseModuleMeter extends IPSModule
     {
         $meterData = [];
         foreach ($channels as $ch) {
-            $nodeName = (string)$ch['NodeName'];
-            $index = (int)$ch['Index'];
-            $key = $nodeName . '>' . $index;
+            $key = (int)$ch['Slot'] . ':' . (int)$ch['Channel'];
+            $label = (string)$ch['Label'] !== '' ? (string)$ch['Label'] : 'S' . $ch['Slot'] . 'C' . $ch['Channel'];
             $meterData[] = [
-                'label' => (string)$ch['Label'],
-                'db'    => isset($levels[$key]) ? (float)$levels[$key] : -80.0,
-                'peak'  => isset($peaks[$key]) ? (float)$peaks[$key] : -80.0,
+                'label' => $label,
+                'db'    => isset($levels[$key]) ? (float)$levels[$key] : -60.0,
+                'peak'  => isset($peaks[$key]) ? (float)$peaks[$key] : -60.0,
             ];
         }
 
@@ -217,7 +194,7 @@ class BoseModuleMeter extends IPSModule
             . 'var YELLOW_DB=' . $yellowDb . ';'
             . 'var RED_DB=' . $redDb . ';'
             . 'var H=' . $height . ';'
-            . 'var DB_MIN=-80,DB_MAX=0;'
+            . 'var DB_MIN=-60,DB_MAX=0;'
             . 'var W=24,GAP=14,PAD_LEFT=36,PAD_TOP=16,PAD_BOTTOM=40;'
             . 'var COL_GREEN=\'#00c853\',COL_YELLOW=\'#ffd600\',COL_RED=\'#ff1744\';'
             . 'var COL_BG=\'#0a0a1e\',COL_BORDER=\'#1e1e3a\',COL_TEXT=\'#9999bb\',COL_DB=\'#ccccee\';'
@@ -257,7 +234,7 @@ class BoseModuleMeter extends IPSModule
             . 'ctx.fillStyle=m.db>-1?COL_RED:\'#2a2a3a\';ctx.fill();'
             . 'if(m.db>-1){ctx.shadowColor=COL_RED;ctx.shadowBlur=6;ctx.fill();ctx.shadowBlur=0;}'
             . 'ctx.fillStyle=COL_DB;ctx.font=\'10px monospace\';ctx.textAlign=\'center\';'
-            . 'var dbText=m.db<=-79?\'\\u2013\\u221e\':m.db.toFixed(1);'
+            . 'var dbText=m.db<=-59?\'\\u2013\\u221e\':m.db.toFixed(1);'
             . 'ctx.fillText(dbText,x+W/2,base+14);'
             . 'ctx.fillStyle=COL_TEXT;ctx.font=\'10px sans-serif\';'
             . 'ctx.fillText(m.label,x+W/2,base+28);}}'
@@ -269,7 +246,7 @@ class BoseModuleMeter extends IPSModule
 
     // ── Private: Helpers ──────────────────────────────────────
 
-    private function SetValueIfChanged($ident, $value)
+    private function SetValueIfChanged(string $ident, $value)
     {
         $vid = @$this->GetIDForIdent($ident);
         if ($vid === false || $vid === 0) return;
