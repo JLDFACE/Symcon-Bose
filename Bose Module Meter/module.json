@@ -1,0 +1,12 @@
+{
+    "id": "{B1E3D5A7-4F8C-9E2B-6A0D-7C5F8E1A3B9D}",
+    "name": "Bose Module Meter",
+    "aliases": ["Bose Level Meter"],
+    "type": 3,
+    "vendor": "FACE GmbH",
+    "parentRequirements": ["{E13A162B-3414-BD54-5C48-F802F8323D2B}"],
+    "childRequirements": [],
+    "implemented": ["{CCC989DC-BF59-BBFD-C02F-BB7D4D815E68}"],
+    "prefix": "BOSE",
+    "url": "https://github.com/JLDFACE/Symcon-Bose"
+}

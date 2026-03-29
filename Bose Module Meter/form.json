@@ -1,0 +1,112 @@
+{
+    "elements": [
+        {
+            "type": "ExpansionPanel",
+            "caption": "Meter-Kanäle",
+            "expanded": true,
+            "items": [
+                {
+                    "type": "List",
+                    "name": "MeterChannels",
+                    "caption": "",
+                    "rowCount": 8,
+                    "add": true,
+                    "delete": true,
+                    "sort": {
+                        "column": "Position",
+                        "direction": "ascending"
+                    },
+                    "columns": [
+                        {
+                            "name": "Position",
+                            "caption": "Pos",
+                            "width": "50px",
+                            "edit": {
+                                "type": "NumberSpinner",
+                                "minimum": 1,
+                                "maximum": 32
+                            }
+                        },
+                        {
+                            "name": "NodeName",
+                            "caption": "Meter Node-Name (aus CSD)",
+                            "width": "auto",
+                            "edit": {
+                                "type": "ValidationTextBox"
+                            }
+                        },
+                        {
+                            "name": "Label",
+                            "caption": "Anzeige-Label",
+                            "width": "120px",
+                            "edit": {
+                                "type": "ValidationTextBox"
+                            }
+                        },
+                        {
+                            "name": "Index",
+                            "caption": "Index",
+                            "width": "60px",
+                            "edit": {
+                                "type": "NumberSpinner",
+                                "minimum": 1,
+                                "maximum": 64
+                            }
+                        }
+                    ],
+                    "values": []
+                }
+            ]
+        },
+        {
+            "type": "ExpansionPanel",
+            "caption": "Darstellung",
+            "items": [
+                {
+                    "type": "NumberSpinner",
+                    "name": "YellowThreshold",
+                    "caption": "Gelb ab (dB)",
+                    "minimum": -60,
+                    "maximum": 0,
+                    "suffix": " dB"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "RedThreshold",
+                    "caption": "Rot ab (dB)",
+                    "minimum": -60,
+                    "maximum": 0,
+                    "suffix": " dB"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "MeterHeight",
+                    "caption": "Meter-Höhe (px)",
+                    "minimum": 100,
+                    "maximum": 400,
+                    "suffix": " px"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "UpdateInterval",
+                    "caption": "HTML-Update Intervall",
+                    "minimum": 200,
+                    "maximum": 5000,
+                    "suffix": " ms"
+                }
+            ]
+        }
+    ],
+    "actions": [
+        {
+            "type": "Button",
+            "caption": "Meter jetzt aktualisieren",
+            "onClick": "BOSE_UpdateMeterHTML($id);"
+        }
+    ],
+    "status": [
+        { "code": 102, "icon": "active",   "caption": "Meter aktiv" },
+        { "code": 104, "icon": "inactive", "caption": "Instanz inaktiv" },
+        { "code": 200, "icon": "error",    "caption": "Keine Meter konfiguriert" }
+    ]
+}
