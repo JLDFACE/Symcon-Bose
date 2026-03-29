@@ -26,6 +26,7 @@ class BoseModuleMeter extends IPSModule
         // Buffer for current meter levels, keyed by "slot:channel"
         $this->SetBuffer('MeterLevels', '{}');
         $this->SetBuffer('PeakLevels', '{}');
+        $this->SetBuffer('PrevDisplayLevels', '{}');
     }
 
     public function ApplyChanges()
@@ -162,27 +163,35 @@ class BoseModuleMeter extends IPSModule
         $channels = $this->GetMeterChannels();
         $levels = json_decode($this->GetBuffer('MeterLevels'), true);
         $peaks = json_decode($this->GetBuffer('PeakLevels'), true);
+        $prevDisplay = json_decode($this->GetBuffer('PrevDisplayLevels'), true);
         if (!is_array($levels)) $levels = [];
         if (!is_array($peaks)) $peaks = [];
+        if (!is_array($prevDisplay)) $prevDisplay = [];
 
         $yellowDb = (int)$this->ReadPropertyInteger('YellowThreshold');
         $redDb = (int)$this->ReadPropertyInteger('RedThreshold');
         $height = (int)$this->ReadPropertyInteger('MeterHeight');
+        $interval = max(100, (int)$this->ReadPropertyInteger('UpdateInterval'));
         $bgColor = sprintf('#%06x', (int)$this->ReadPropertyInteger('BackgroundColor') & 0xFFFFFF);
 
-        $html = $this->BuildMeterHTML($channels, $levels, $peaks, $yellowDb, $redDb, $height, $bgColor);
+        $html = $this->BuildMeterHTML($channels, $levels, $peaks, $prevDisplay, $yellowDb, $redDb, $height, $interval, $bgColor);
         $this->SetValueIfChanged('LevelMeter', $html);
+
+        // Save current levels as start point for next interpolation
+        $this->SetBuffer('PrevDisplayLevels', json_encode($levels));
     }
 
-    private function BuildMeterHTML(array $channels, array $levels, array $peaks, $yellowDb, $redDb, $height, $bgColor)
+    private function BuildMeterHTML(array $channels, array $levels, array $peaks, array $prevDisplay, $yellowDb, $redDb, $height, $interval, $bgColor)
     {
         $meterData = [];
         foreach ($channels as $ch) {
             $key = (int)$ch['Slot'] . ':' . (int)$ch['Channel'];
             $label = (string)$ch['Label'] !== '' ? (string)$ch['Label'] : 'S' . $ch['Slot'] . 'C' . $ch['Channel'];
+            $cur = isset($levels[$key]) ? (float)$levels[$key] : -60.0;
             $meterData[] = [
                 'label' => $label,
-                'db'    => isset($levels[$key]) ? (float)$levels[$key] : -60.0,
+                'db'    => $cur,
+                'prev'  => isset($prevDisplay[$key]) ? (float)$prevDisplay[$key] : $cur,
                 'peak'  => isset($peaks[$key]) ? (float)$peaks[$key] : -60.0,
             ];
         }
@@ -196,6 +205,7 @@ class BoseModuleMeter extends IPSModule
             . 'var YELLOW_DB=' . $yellowDb . ';'
             . 'var RED_DB=' . $redDb . ';'
             . 'var H=' . $height . ';'
+            . 'var DURATION=' . $interval . ';'
             . 'var DB_MIN=-60,DB_MAX=0;'
             . 'var GAP=10,PAD_LEFT=36,PAD_TOP=16,PAD_BOTTOM=40;'
             . 'var W_MIN=20,W_MAX=60;'
@@ -230,22 +240,31 @@ class BoseModuleMeter extends IPSModule
             . 'ctx.fillText(scaleVals[s].toString(),PAD_LEFT-8,sy+3);}'
             . 'for(var i=0;i<DATA.length;i++){'
             . 'var m=DATA[i];var x=PAD_LEFT+i*(W+GAP);var base=PAD_TOP+H;'
+            . 'var dv=m.disp!==undefined?m.disp:m.db;'
             . 'ctx.fillStyle=COL_BG;ctx.strokeStyle=COL_BORDER;ctx.lineWidth=1;'
             . 'ctx.fillRect(x,PAD_TOP,W,H);ctx.strokeRect(x-0.5,PAD_TOP-0.5,W+1,H+1);'
-            . 'drawBar(x,dbToY(m.db),W);'
+            . 'drawBar(x,dbToY(dv),W);'
             . 'var peakY=dbToY(m.peak);'
             . 'if(peakY>0){var peakColor=m.peak>=RED_DB?COL_RED:(m.peak>=YELLOW_DB?COL_YELLOW:COL_GREEN);'
             . 'ctx.fillStyle=peakColor;ctx.fillRect(x,base-peakY-1,W,2);}'
             . 'var dotX=x+W/2;var dotY=PAD_TOP-8;'
             . 'ctx.beginPath();ctx.arc(dotX,dotY,4,0,Math.PI*2);'
-            . 'ctx.fillStyle=m.db>-1?COL_RED:\'#2a2a3a\';ctx.fill();'
-            . 'if(m.db>-1){ctx.shadowColor=COL_RED;ctx.shadowBlur=6;ctx.fill();ctx.shadowBlur=0;}'
+            . 'ctx.fillStyle=dv>-1?COL_RED:\'#2a2a3a\';ctx.fill();'
+            . 'if(dv>-1){ctx.shadowColor=COL_RED;ctx.shadowBlur=6;ctx.fill();ctx.shadowBlur=0;}'
             . 'ctx.fillStyle=COL_DB;ctx.font=\'10px monospace\';ctx.textAlign=\'center\';'
-            . 'var dbText=m.db<=-59?\'\\u2013\\u221e\':m.db.toFixed(1);'
+            . 'var dbText=dv<=-59?\'\\u2013\\u221e\':dv.toFixed(1);'
             . 'ctx.fillText(dbText,x+W/2,base+14);'
             . 'ctx.fillStyle=COL_TEXT;ctx.font=\'10px sans-serif\';'
             . 'ctx.fillText(m.label,x+W/2,base+28);}}'
+            . 'var startTime=null;'
+            . 'function animate(ts){'
+            . 'if(!startTime)startTime=ts;'
+            . 'var t=Math.min(1,(ts-startTime)/DURATION);'
+            . 'var e=1-Math.pow(1-t,3);'
+            . 'for(var i=0;i<DATA.length;i++){DATA[i].disp=DATA[i].prev+(DATA[i].db-DATA[i].prev)*e;}'
             . 'draw();'
+            . 'if(t<1)requestAnimationFrame(animate);}'
+            . 'requestAnimationFrame(animate);'
             . '})();</script></div>';
 
         return $html;
