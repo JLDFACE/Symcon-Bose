@@ -41,6 +41,13 @@ class BoseModuleMeter extends IPSModule
 
         $this->MaintainVariable('LevelMeter', 'Level Meter', VARIABLETYPE_STRING, '~HTMLBox', 0, true);
 
+        // Float variable per channel
+        foreach ($channels as $ch) {
+            $ident = 'Level_' . (int)$ch['Position'];
+            $label = (string)$ch['Label'] !== '' ? (string)$ch['Label'] : (string)$ch['NodeName'];
+            $this->MaintainVariable($ident, $label, VARIABLETYPE_FLOAT, 'BoseGainLevelDB', (int)$ch['Position'] + 1, true);
+        }
+
         if ($this->HasActiveParent()) {
             $this->SubscribeMeters($channels);
         }
@@ -78,6 +85,8 @@ class BoseModuleMeter extends IPSModule
             if ((string)$ch['NodeName'] === $moduleName && (int)$ch['Index'] === $index1) {
                 $this->SendDebug('Meter.Receive', $moduleName . '>' . $index1 . '=' . $value, 0);
                 $this->UpdateMeterLevel($moduleName, $index1, $value);
+                $ident = 'Level_' . (int)$ch['Position'];
+                $this->SetValueIfChanged($ident, $value);
                 return;
             }
         }
