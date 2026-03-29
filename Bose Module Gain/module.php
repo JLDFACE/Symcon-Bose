@@ -214,6 +214,9 @@ class BoseModuleGain extends IPSModule {
         $data = json_decode($JSONString, true);
         $data = $data["Buffer"];
 
+        if (!isset($data["moduleName"]))
+            return;
+
         // Check if module name equals instance module name
         if ($this->ReadPropertyString("modulename") != $data["moduleName"])
             return;
