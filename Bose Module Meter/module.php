@@ -18,6 +18,7 @@ class BoseModuleMeter extends IPSModule
         $this->RegisterPropertyInteger('RedThreshold', -10);
         $this->RegisterPropertyInteger('MeterHeight', 180);
         $this->RegisterPropertyInteger('UpdateInterval', 200);
+        $this->RegisterPropertyString('BackgroundColor', '#1a1a2e');
 
         // Timer: poll GL + render HTML
         $this->RegisterTimer('MeterUpdate', 0, 'BOSE_UpdateMeterHTML(' . $this->InstanceID . ');');
@@ -167,12 +168,13 @@ class BoseModuleMeter extends IPSModule
         $yellowDb = (int)$this->ReadPropertyInteger('YellowThreshold');
         $redDb = (int)$this->ReadPropertyInteger('RedThreshold');
         $height = (int)$this->ReadPropertyInteger('MeterHeight');
+        $bgColor = (string)$this->ReadPropertyString('BackgroundColor');
 
-        $html = $this->BuildMeterHTML($channels, $levels, $peaks, $yellowDb, $redDb, $height);
+        $html = $this->BuildMeterHTML($channels, $levels, $peaks, $yellowDb, $redDb, $height, $bgColor);
         $this->SetValueIfChanged('LevelMeter', $html);
     }
 
-    private function BuildMeterHTML(array $channels, array $levels, array $peaks, $yellowDb, $redDb, $height)
+    private function BuildMeterHTML(array $channels, array $levels, array $peaks, $yellowDb, $redDb, $height, $bgColor)
     {
         $meterData = [];
         foreach ($channels as $ch) {
@@ -187,7 +189,7 @@ class BoseModuleMeter extends IPSModule
 
         $jsonData = json_encode($meterData);
 
-        $html = '<div id="bose-meter-root" style="font-family:-apple-system,\'Segoe UI\',Roboto,sans-serif;background:#1a1a2e;padding:12px 12px 8px;margin:0;box-sizing:border-box;width:100%;">'
+        $html = '<div id="bose-meter-root" style="font-family:-apple-system,\'Segoe UI\',Roboto,sans-serif;background:' . htmlspecialchars($bgColor, ENT_QUOTES) . ';padding:12px 12px 8px;margin:0;box-sizing:border-box;width:100%;">'
             . '<canvas id="bose-meter-canvas" style="display:block;"></canvas>'
             . '<script>(function(){'
             . 'var DATA=' . $jsonData . ';'
@@ -198,7 +200,7 @@ class BoseModuleMeter extends IPSModule
             . 'var GAP=10,PAD_LEFT=36,PAD_TOP=16,PAD_BOTTOM=40;'
             . 'var W_MIN=20,W_MAX=60;'
             . 'var COL_GREEN=\'#00c853\',COL_YELLOW=\'#ffd600\',COL_RED=\'#ff1744\';'
-            . 'var COL_BG=\'#0a0a1e\',COL_BORDER=\'#1e1e3a\',COL_TEXT=\'#9999bb\',COL_DB=\'#ccccee\';'
+            . 'var COL_BG=\'#0a0a1e\',COL_BORDER=\'#1e1e3a\',COL_TEXT=\'#9999bb\',COL_DB=\'#ccccee\',COL_ROOT=\'' . addslashes($bgColor) . '\';'
             . 'var DPR=window.devicePixelRatio||1;'
             . 'var canvas=document.getElementById(\'bose-meter-canvas\');'
             . 'var root=document.getElementById(\'bose-meter-root\');'
@@ -211,16 +213,15 @@ class BoseModuleMeter extends IPSModule
             . 'canvas.style.width=totalW+\'px\';canvas.style.height=totalH+\'px\';'
             . 'var ctx=canvas.getContext(\'2d\');ctx.scale(DPR,DPR);'
             . 'function dbToY(db){var c=Math.max(DB_MIN,Math.min(DB_MAX,db));return((c-DB_MIN)/(DB_MAX-DB_MIN))*H;}'
-            . 'function drawSegments(x,fillH,w){'
+            . 'function drawBar(x,fillH,w){'
             . 'if(fillH<=0)return;'
             . 'var yellowY=dbToY(YELLOW_DB);var redY=dbToY(RED_DB);var base=PAD_TOP+H;'
             . 'var gH=Math.min(fillH,yellowY);'
             . 'if(gH>0){ctx.fillStyle=COL_GREEN;ctx.fillRect(x,base-gH,w,gH);}'
             . 'if(fillH>yellowY){var yH=Math.min(fillH,redY)-yellowY;if(yH>0){ctx.fillStyle=COL_YELLOW;ctx.fillRect(x,base-Math.min(fillH,redY),w,yH);}}'
-            . 'if(fillH>redY){var rH=fillH-redY;ctx.fillStyle=COL_RED;ctx.fillRect(x,base-fillH,w,rH);}'
-            . 'ctx.fillStyle=COL_BG;for(var sy=0;sy<H;sy+=5){ctx.fillRect(x,PAD_TOP+sy,w,1);}}'
+            . 'if(fillH>redY){var rH=fillH-redY;ctx.fillStyle=COL_RED;ctx.fillRect(x,base-fillH,w,rH);}}'
             . 'function draw(){'
-            . 'ctx.clearRect(0,0,canvas.width,canvas.height);'
+            . 'ctx.fillStyle=COL_ROOT;ctx.fillRect(0,0,totalW,totalH);'
             . 'ctx.font=\'9px monospace\';ctx.textAlign=\'right\';'
             . 'var scaleVals=[0,RED_DB,YELLOW_DB,-40,-60];'
             . 'for(var s=0;s<scaleVals.length;s++){'
@@ -231,7 +232,7 @@ class BoseModuleMeter extends IPSModule
             . 'var m=DATA[i];var x=PAD_LEFT+i*(W+GAP);var base=PAD_TOP+H;'
             . 'ctx.fillStyle=COL_BG;ctx.strokeStyle=COL_BORDER;ctx.lineWidth=1;'
             . 'ctx.fillRect(x,PAD_TOP,W,H);ctx.strokeRect(x-0.5,PAD_TOP-0.5,W+1,H+1);'
-            . 'drawSegments(x,dbToY(m.db),W);'
+            . 'drawBar(x,dbToY(m.db),W);'
             . 'var peakY=dbToY(m.peak);'
             . 'if(peakY>0){var peakColor=m.peak>=RED_DB?COL_RED:(m.peak>=YELLOW_DB?COL_YELLOW:COL_GREEN);'
             . 'ctx.fillStyle=peakColor;ctx.fillRect(x,base-peakY-1,W,2);}'

@@ -103,6 +103,11 @@
                     "minimum": 100,
                     "maximum": 5000,
                     "suffix": " ms"
+                },
+                {
+                    "type": "ValidationTextBox",
+                    "name": "BackgroundColor",
+                    "caption": "Hintergrundfarbe (CSS)"
                 }
             ]
         }
