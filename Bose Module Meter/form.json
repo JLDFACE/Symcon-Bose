@@ -113,6 +113,14 @@
                     "suffix": " px"
                 },
                 {
+                    "type": "NumberSpinner",
+                    "name": "SignalThreshold",
+                    "caption": "Signal-Schwelle (dB)",
+                    "minimum": -60,
+                    "maximum": 0,
+                    "suffix": " dB"
+                },
+                {
                     "type": "SelectColor",
                     "name": "BackgroundColor",
                     "caption": "Hintergrundfarbe"

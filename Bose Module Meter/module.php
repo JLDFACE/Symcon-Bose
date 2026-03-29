@@ -17,6 +17,7 @@ class BoseModuleMeter extends IPSModule
         $this->RegisterPropertyInteger('BackgroundColor', 0x1a1a2e);
         $this->RegisterPropertyInteger('BackgroundOpacity', 100);
         $this->RegisterPropertyInteger('BarWidth', 32);
+        $this->RegisterPropertyInteger('SignalThreshold', -50);
 
         // Poll GL every 100 ms, accumulate samples
         $this->RegisterTimer('GlPoll', 0, 'BOSE_PollGl(' . $this->InstanceID . ');');
@@ -44,9 +45,10 @@ class BoseModuleMeter extends IPSModule
         $this->MaintainVariable('LevelMeter', 'Level Meter', VARIABLETYPE_STRING, '~HTMLBox', 0, true);
 
         foreach ($channels as $ch) {
-            $ident = 'Level_' . (int)$ch['Position'];
+            $pos   = (int)$ch['Position'];
             $label = (string)$ch['Label'] !== '' ? (string)$ch['Label'] : 'Slot ' . $ch['Slot'] . ' Ch ' . $ch['Channel'];
-            $this->MaintainVariable($ident, $label, VARIABLETYPE_FLOAT, 'BoseGainLevelDB', (int)$ch['Position'] + 1, true);
+            $this->MaintainVariable('Level_'  . $pos, $label,            VARIABLETYPE_FLOAT,   'BoseGainLevelDB', $pos * 2 + 1, true);
+            $this->MaintainVariable('Signal_' . $pos, $label . ' Signal', VARIABLETYPE_BOOLEAN, '~Switch',         $pos * 2 + 2, true);
         }
 
         $this->SetTimerInterval('GlPoll', 100);
@@ -130,9 +132,10 @@ class BoseModuleMeter extends IPSModule
             } else {
                 $averages[$key] = isset($lastAvg[$key]) ? (float)$lastAvg[$key] : -60.0;
             }
-            // Write float variable
-            $ident = 'Level_' . (int)$ch['Position'];
-            $this->SetValueIfChanged($ident, $averages[$key]);
+            // Write level + signal variables
+            $pos = (int)$ch['Position'];
+            $this->SetValueIfChanged('Level_'  . $pos, $averages[$key]);
+            $this->SetValueIfChanged('Signal_' . $pos, $averages[$key] > (int)$this->ReadPropertyInteger('SignalThreshold'));
         }
 
         // Reset sample buffer for next second
