@@ -179,7 +179,7 @@ class BoseModuleGain extends IPSModule {
     }
 
 
-    public function SetLevel($level) {
+    public function SetLevel(float $level) {
         if ($level < -60.5 || $level > 12.0) {
             echo ("Das Level muss mindestens -60.5dB oder maximal +12.0dB betragen.");
             return false;
@@ -189,7 +189,7 @@ class BoseModuleGain extends IPSModule {
         return true;
     }
 
-    public function SetLevelPercent($level) {
+    public function SetLevelPercent(int $level) {
         if ($level < 0 || $level > 100) {
             echo ("Das Level muss mindestens 0% oder maximal 100% betragen.");
             return false;
@@ -198,11 +198,11 @@ class BoseModuleGain extends IPSModule {
         return $this->SetLevel((100 - $level) / 100 * -60.5);
     }
 
-    public function SetActive($active) {
+    public function SetActive(bool $active) {
         $this->SendCommand('SA"' . $this->ReadPropertyString("modulename") . '">2=' . (($active) ? 'F' : 'O'));
     }
 
-    public function SendCommand($msg) {
+    public function SendCommand(string $msg) {
         $this->SendDataToParent(json_encode([
             'DataID' => '{E13A162B-3414-BD54-5C48-F802F8323D2B}',
             'Buffer' => $msg . "\r"

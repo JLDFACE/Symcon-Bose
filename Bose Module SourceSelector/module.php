@@ -107,7 +107,7 @@ class BoseModuleSourceSelector extends IPSModule {
     }
 
 
-    public function SetSource($source) {
+    public function SetSource(int $source) {
         if ($source < 1 || $source > intval($this->ReadPropertyInteger("sourcecount"))) {
             echo("Dieses Modul besitzt nur " . $this->ReadPropertyInteger("sourcecount") . " Eingänge.");
             return false;
@@ -118,7 +118,7 @@ class BoseModuleSourceSelector extends IPSModule {
         $this->StartBurstPolling(3);
 }
 
-    public function SendCommand($msg) {
+    public function SendCommand(string $msg) {
         $this->SendDataToParent(json_encode([
             'DataID' => '{E13A162B-3414-BD54-5C48-F802F8323D2B}',
             'Buffer' => $msg . "\r"

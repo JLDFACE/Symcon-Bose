@@ -296,7 +296,7 @@ $this->RegisterTimer("FlushPending", 500, "BOSE_FlushPending(" . $this->Instance
         $this->LogMessage("No device response for >45s. Triggering reconnect.", KL_WARNING);
     }
 
-    public function RecallParameterSet($setNumber)
+    public function RecallParameterSet(int $setNumber)
     {
         if ($setNumber < 1 || $setNumber > 32) {
             echo("Es können nur ParameterSets von 1 bis 32 ausgewählt werden.");
@@ -314,7 +314,7 @@ $this->RegisterTimer("FlushPending", 500, "BOSE_FlushPending(" . $this->Instance
         $this->SendCommand("GS");
     }
 
-    public function SendCommand($msg)
+    public function SendCommand(string $msg)
     {
         $this->UpdateSubscriptionsFromCommand($msg);
 
