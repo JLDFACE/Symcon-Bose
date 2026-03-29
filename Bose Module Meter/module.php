@@ -269,12 +269,14 @@ class BoseModuleMeter extends IPSModule
             . 'var m=DATA[i];var x=PAD_LEFT+i*(W+GAP);'
             . 'var dv=m.prev+(m.db-m.prev)*s;'
             . 'drawMeter(dv,m,x);}}'
-            // Restore previous state synchronously from sessionStorage → no blank flash
+            // Draw PREV state synchronously before first paint → minimises blank flash
+            . 'drawFrame(0);'
+            // Try to use sessionStorage for even better PREV (last rendered state)
             . 'try{'
             . 'var cached=JSON.parse(sessionStorage.getItem(CACHE_KEY)||\'null\');'
             . 'if(cached&&cached.length===DATA.length){'
             . 'for(var ci=0;ci<DATA.length;ci++){DATA[ci].prev=cached[ci].db;}'
-            . 'drawFrame(0);}'  // draw prev state synchronously
+            . 'drawFrame(0);}'
             . '}catch(e){}'
             // Animated rAF loop
             . 'function frame(ts){'
