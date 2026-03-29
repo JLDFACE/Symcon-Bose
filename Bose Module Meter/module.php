@@ -24,13 +24,11 @@ class BoseModuleMeter extends IPSModule
         $this->RegisterPropertyInteger('BackgroundOpacity', 100);
         $this->RegisterPropertyInteger('BarWidth', 32);
 
-        // Poll GL every 100 ms, accumulate samples
-        $this->RegisterTimer('GlPoll', 0, 'BOSE_PollGl(' . $this->InstanceID . ');');
-        // Every 1000 ms: compute average, write HTML
+        $this->RegisterTimer('GlPoll',     0, 'BOSE_PollGl(' . $this->InstanceID . ');');
         $this->RegisterTimer('MeterUpdate', 0, 'BOSE_UpdateMeterHTML(' . $this->InstanceID . ');');
 
-        $this->SetBuffer('SampleBuffer', '{}'); // {"key": [v1,v2,...]}
-        $this->SetBuffer('LastAverage',  '{}'); // {"key": avg}
+        $this->SetBuffer('SampleBuffer', '{}');
+        $this->SetBuffer('LastAverage',  '{}');
         $this->SetBuffer('PeakLevels',   '{}');
     }
 
@@ -47,7 +45,11 @@ class BoseModuleMeter extends IPSModule
             return;
         }
 
+        // LevelMeter: HTMLBox (static template, written once)
         $this->MaintainVariable('LevelMeter', 'Level Meter', VARIABLETYPE_STRING, '~HTMLBox', 0, true);
+
+        // MeterData: machine-readable JSON for JS polling (not for WebFront display)
+        $this->MaintainVariable('MeterData', 'Meter Data', VARIABLETYPE_STRING, '', -1, true);
 
         foreach ($channels as $ch) {
             $pos   = (int)$ch['Position'];
@@ -57,11 +59,19 @@ class BoseModuleMeter extends IPSModule
             // Disable archive logging for Level variable (updates every second → floods log)
             $lvlID = $this->GetIDForIdent('Level_' . $pos);
             if ($lvlID > 0) {
-                $archiveID = @IPS_GetInstanceIDByModuleID('{43192F0B-135B-4CE7-A0A7-1475603F3060}');
-                if ($archiveID > 0) {
-                    AC_SetLoggingStatus($archiveID, $lvlID, false);
+                $archiveIDs = IPS_GetInstanceListByModuleID('{43192F0B-135B-4CE7-A0A7-1475603F3060}');
+                if (count($archiveIDs) > 0) {
+                    AC_SetLoggingStatus($archiveIDs[0], $lvlID, false);
                 }
             }
+        }
+
+        // (Re)write static HTML template whenever config changes
+        $dataVarID = $this->GetIDForIdent('MeterData');
+        $html = $this->BuildMeterTemplate($dataVarID, $channels);
+        $lvmID = $this->GetIDForIdent('LevelMeter');
+        if ($lvmID > 0 && GetValue($lvmID) !== $html) {
+            $this->SetValue('LevelMeter', $html);
         }
 
         $this->SetTimerInterval('GlPoll', 100);
@@ -81,8 +91,8 @@ class BoseModuleMeter extends IPSModule
         $slot   = (int)$buffer['slot'];
         $levels = $buffer['levels'];
 
-        $samples  = json_decode($this->GetBuffer('SampleBuffer'), true);
-        $peaks    = json_decode($this->GetBuffer('PeakLevels'), true);
+        $samples = json_decode($this->GetBuffer('SampleBuffer'), true);
+        $peaks   = json_decode($this->GetBuffer('PeakLevels'), true);
         if (!is_array($samples)) $samples = [];
         if (!is_array($peaks))   $peaks   = [];
 
@@ -95,14 +105,12 @@ class BoseModuleMeter extends IPSModule
             $db  = (float)$levels[$idx];
             $key = $slot . ':' . $chNum;
 
-            // Accumulate sample
             if (!isset($samples[$key])) $samples[$key] = [];
             $samples[$key][] = $db;
             if (count($samples[$key]) > 30) {
                 $samples[$key] = array_slice($samples[$key], -30);
             }
 
-            // Peak: instant attack, slow decay
             $peak = isset($peaks[$key]) ? (float)$peaks[$key] : $db;
             $peaks[$key] = round($db > $peak ? $db : $peak - 0.1, 1);
         }
@@ -129,7 +137,6 @@ class BoseModuleMeter extends IPSModule
         $channels = $this->GetMeterChannels();
         if (count($channels) === 0) return;
 
-        // Compute 1-second averages from sample buffer
         $samples = json_decode($this->GetBuffer('SampleBuffer'), true);
         $peaks   = json_decode($this->GetBuffer('PeakLevels'), true);
         $lastAvg = json_decode($this->GetBuffer('LastAverage'), true);
@@ -137,7 +144,8 @@ class BoseModuleMeter extends IPSModule
         if (!is_array($peaks))   $peaks   = [];
         if (!is_array($lastAvg)) $lastAvg = [];
 
-        $averages = [];
+        $averages  = [];
+        $meterData = [];
         foreach ($channels as $ch) {
             $key = (int)$ch['Slot'] . ':' . (int)$ch['Channel'];
             if (isset($samples[$key]) && count($samples[$key]) > 0) {
@@ -145,20 +153,26 @@ class BoseModuleMeter extends IPSModule
             } else {
                 $averages[$key] = isset($lastAvg[$key]) ? (float)$lastAvg[$key] : -60.0;
             }
-            // Write level + signal variables
+
             $pos       = (int)$ch['Position'];
             $threshold = isset($ch['Threshold']) ? (int)$ch['Threshold'] : -50;
+            $label     = (string)$ch['Label'] !== '' ? (string)$ch['Label'] : 'S' . $ch['Slot'] . 'C' . $ch['Channel'];
+
             $this->SetValueIfChanged('Level_'  . $pos, $averages[$key]);
             $this->SetValueIfChanged('Signal_' . $pos, $averages[$key] > $threshold);
+
+            $meterData[] = [
+                'label' => $label,
+                'db'    => $averages[$key],
+                'peak'  => isset($peaks[$key]) ? (float)$peaks[$key] : -60.0,
+            ];
         }
 
-        // Reset sample buffer for next second
         $this->SetBuffer('SampleBuffer', '{}');
         $this->SetBuffer('LastAverage', json_encode($averages));
 
-        // Render HTML: prev = lastAvg, target = averages
-        $html = $this->BuildMeterHTML($channels, $lastAvg, $averages, $peaks);
-        $this->SetValueIfChanged('LevelMeter', $html);
+        // Write only the compact JSON data — JS polls this, no HTML rewrite
+        $this->SetValueIfChanged('MeterData', json_encode($meterData));
     }
 
     // ── Private: Protocol ─────────────────────────────────────
@@ -183,9 +197,9 @@ class BoseModuleMeter extends IPSModule
         return $channels;
     }
 
-    // ── Private: HTML Rendering ───────────────────────────────
+    // ── Private: HTML Template (written once) ─────────────────
 
-    private function BuildMeterHTML(array $channels, array $prev, array $target, array $peaks)
+    private function BuildMeterTemplate(int $dataVarID, array $channels)
     {
         $yellowDb = (int)$this->ReadPropertyInteger('YellowThreshold');
         $redDb    = (int)$this->ReadPropertyInteger('RedThreshold');
@@ -194,27 +208,19 @@ class BoseModuleMeter extends IPSModule
         $opacity  = max(0, min(100, (int)$this->ReadPropertyInteger('BackgroundOpacity'))) / 100.0;
         $bgColor  = sprintf('rgba(%d,%d,%d,%.2f)', ($bgInt >> 16) & 0xFF, ($bgInt >> 8) & 0xFF, $bgInt & 0xFF, $opacity);
         $barWidth = max(8, min(80, (int)$this->ReadPropertyInteger('BarWidth')));
+        $n        = max(1, count($channels));
 
-        $meterData = [];
+        // Build initial DATA for first render before first poll
+        $initData = [];
         foreach ($channels as $ch) {
-            $key   = (int)$ch['Slot'] . ':' . (int)$ch['Channel'];
             $label = (string)$ch['Label'] !== '' ? (string)$ch['Label'] : 'S' . $ch['Slot'] . 'C' . $ch['Channel'];
-            $t     = isset($target[$key]) ? (float)$target[$key] : -60.0;
-            $p     = isset($prev[$key])   ? (float)$prev[$key]   : $t;
-            $meterData[] = [
-                'label' => $label,
-                'prev'  => $p,
-                'db'    => $t,
-                'peak'  => isset($peaks[$key]) ? (float)$peaks[$key] : -60.0,
-            ];
+            $initData[] = ['label' => $label, 'db' => -60.0, 'peak' => -60.0];
         }
-
-        $jsonData = json_encode($meterData);
 
         $html = '<div id="bose-meter-root" style="font-family:-apple-system,\'Segoe UI\',Roboto,sans-serif;background:' . htmlspecialchars($bgColor, ENT_QUOTES) . ';padding:12px 12px 8px;margin:0;box-sizing:border-box;width:100%;">'
             . '<canvas id="bose-meter-canvas" style="display:block;"></canvas>'
             . '<script>(function(){'
-            . 'var DATA=' . $jsonData . ';'
+            . 'var VID=' . $dataVarID . ';'
             . 'var YELLOW_DB=' . $yellowDb . ';'
             . 'var RED_DB=' . $redDb . ';'
             . 'var H=' . $height . ';'
@@ -228,13 +234,17 @@ class BoseModuleMeter extends IPSModule
             . 'var canvas=document.getElementById(\'bose-meter-canvas\');'
             . 'var root=document.getElementById(\'bose-meter-root\');'
             . 'var availW=Math.max(200,(root.offsetWidth||window.innerWidth||300))-24;'
-            . 'var n=Math.max(1,DATA.length);'
+            . 'var n=Math.max(1,' . $n . ');'
             . 'var W=Math.min(W_MAX,Math.max(W_MIN,Math.floor((availW-PAD_LEFT-GAP*(n-1))/n)));'
             . 'var totalW=PAD_LEFT+n*(W+GAP)-GAP+10;'
             . 'var totalH=PAD_TOP+H+PAD_BOTTOM;'
             . 'canvas.width=totalW*DPR;canvas.height=totalH*DPR;'
             . 'canvas.style.width=totalW+\'px\';canvas.style.height=totalH+\'px\';'
             . 'var ctx=canvas.getContext(\'2d\');ctx.scale(DPR,DPR);'
+            // DATA: current target values; PREV: previous values for smooth animation
+            . 'var DATA=' . json_encode($initData) . ';'
+            . 'var PREV=DATA.map(function(d){return{db:d.db,peak:d.peak};});'
+            . 'var animRaf=null;'
             . 'function dbToY(db){var c=Math.max(DB_MIN,Math.min(DB_MAX,db));return((c-DB_MIN)/(DB_MAX-DB_MIN))*H;}'
             . 'function drawBar(x,fillH,w){'
             . 'if(fillH<=0)return;'
@@ -260,23 +270,46 @@ class BoseModuleMeter extends IPSModule
             . 'ctx.fillStyle=COL_TEXT;ctx.font=\'10px sans-serif\';'
             . 'ctx.fillText(m.label,x+W/2,base+28);'
             . 'ctx.restore();}'
-            . 'function frame(ts){'
-            . 'if(!frame.t0)frame.t0=ts;'
-            . 'var e=Math.min(1,(ts-frame.t0)/DURATION);'
-            . 'var s=e<1?e*(2-e):1;' // ease-out quad
+            . 'function renderFrame(ts){'
+            . 'if(!renderFrame.t0)renderFrame.t0=ts;'
+            . 'var e=Math.min(1,(ts-renderFrame.t0)/DURATION);'
+            . 'var s=e<1?e*(2-e):1;'
             . 'ctx.fillStyle=COL_ROOT;ctx.fillRect(0,0,totalW,totalH);'
             . 'ctx.font=\'9px monospace\';ctx.textAlign=\'right\';'
             . 'var scaleVals=[0,RED_DB,YELLOW_DB,-40,-60];'
-            . 'for(var s2=0;s2<scaleVals.length;s2++){'
-            . 'var sy=PAD_TOP+H-dbToY(scaleVals[s2]);'
-            . 'ctx.fillStyle=scaleVals[s2]>=RED_DB?\'#ff174466\':(scaleVals[s2]>=YELLOW_DB?\'#ffd60066\':\'#44445e\');'
-            . 'ctx.fillText(scaleVals[s2].toString(),PAD_LEFT-8,sy+3);}'
+            . 'for(var i2=0;i2<scaleVals.length;i2++){'
+            . 'var sy=PAD_TOP+H-dbToY(scaleVals[i2]);'
+            . 'ctx.fillStyle=scaleVals[i2]>=RED_DB?\'#ff174466\':(scaleVals[i2]>=YELLOW_DB?\'#ffd60066\':\'#44445e\');'
+            . 'ctx.fillText(scaleVals[i2].toString(),PAD_LEFT-8,sy+3);}'
             . 'for(var i=0;i<DATA.length;i++){'
             . 'var m=DATA[i];var x=PAD_LEFT+i*(W+GAP);'
-            . 'var dv=m.prev+(m.db-m.prev)*s;'
+            . 'var prevDb=PREV[i]?PREV[i].db:m.db;'
+            . 'var dv=prevDb+(m.db-prevDb)*s;'
             . 'draw(dv,m,x);}'
-            . 'if(e<1)requestAnimationFrame(frame);}'
-            . 'requestAnimationFrame(frame);'
+            . 'if(e<1){animRaf=requestAnimationFrame(renderFrame);}else{animRaf=null;}}'
+            . 'function startAnim(){'
+            . 'if(animRaf){cancelAnimationFrame(animRaf);}'
+            . 'renderFrame.t0=null;'
+            . 'animRaf=requestAnimationFrame(renderFrame);}'
+            // Poll IPS JSON-RPC API every 1s for new data
+            . 'function poll(){'
+            . 'var xhr=new XMLHttpRequest();'
+            . 'xhr.open(\'POST\',\'/api/\',true);'
+            . 'xhr.setRequestHeader(\'Content-Type\',\'application/json\');'
+            . 'xhr.onload=function(){'
+            . 'try{'
+            . 'var r=JSON.parse(xhr.responseText);'
+            . 'if(r.result!==undefined&&r.result!==\'\'&&r.result!==null){'
+            . 'var nd=JSON.parse(r.result);'
+            . 'if(nd&&nd.length){'
+            . 'PREV=DATA.map(function(d){return{db:d.db,peak:d.peak};});'
+            . 'DATA=nd;startAnim();}}'
+            . '}catch(e){}'
+            . 'setTimeout(poll,1000);};'
+            . 'xhr.onerror=function(){setTimeout(poll,1000);};'
+            . 'xhr.send(JSON.stringify({jsonrpc:\'2.0\',method:\'GetValue\',params:[VID],id:1}));}'
+            . 'startAnim();'
+            . 'setTimeout(poll,1000);'
             . '})();</script></div>';
 
         return $html;
