@@ -21,6 +21,7 @@
                             "name": "Position",
                             "caption": "Pos",
                             "width": "50px",
+                            "add": 1,
                             "edit": {
                                 "type": "NumberSpinner",
                                 "minimum": 1,
@@ -31,6 +32,7 @@
                             "name": "NodeName",
                             "caption": "Meter Node-Name (aus CSD)",
                             "width": "auto",
+                            "add": "",
                             "edit": {
                                 "type": "ValidationTextBox"
                             }
@@ -39,6 +41,7 @@
                             "name": "Label",
                             "caption": "Anzeige-Label",
                             "width": "120px",
+                            "add": "",
                             "edit": {
                                 "type": "ValidationTextBox"
                             }
@@ -47,6 +50,7 @@
                             "name": "Index",
                             "caption": "Index",
                             "width": "60px",
+                            "add": 1,
                             "edit": {
                                 "type": "NumberSpinner",
                                 "minimum": 1,
