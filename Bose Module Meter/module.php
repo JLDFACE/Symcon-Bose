@@ -16,6 +16,7 @@ class BoseModuleMeter extends IPSModule
         $this->RegisterPropertyInteger('MeterHeight', 180);
         $this->RegisterPropertyInteger('BackgroundColor', 0x1a1a2e);
         $this->RegisterPropertyInteger('BackgroundOpacity', 100);
+        $this->RegisterPropertyInteger('BarWidth', 32);
 
         // Poll GL every 100 ms, accumulate samples
         $this->RegisterTimer('GlPoll', 0, 'BOSE_PollGl(' . $this->InstanceID . ');');
@@ -175,6 +176,7 @@ class BoseModuleMeter extends IPSModule
         $bgInt    = (int)$this->ReadPropertyInteger('BackgroundColor') & 0xFFFFFF;
         $opacity  = max(0, min(100, (int)$this->ReadPropertyInteger('BackgroundOpacity'))) / 100.0;
         $bgColor  = sprintf('rgba(%d,%d,%d,%.2f)', ($bgInt >> 16) & 0xFF, ($bgInt >> 8) & 0xFF, $bgInt & 0xFF, $opacity);
+        $barWidth = max(8, min(80, (int)$this->ReadPropertyInteger('BarWidth')));
 
         $meterData = [];
         foreach ($channels as $ch) {
@@ -202,7 +204,7 @@ class BoseModuleMeter extends IPSModule
             . 'var DURATION=950;'
             . 'var DB_MIN=-60,DB_MAX=0;'
             . 'var GAP=10,PAD_LEFT=36,PAD_TOP=16,PAD_BOTTOM=40;'
-            . 'var W_MIN=12,W_MAX=32;'
+            . 'var W_MIN=8,W_MAX=' . $barWidth . ';'
             . 'var COL_GREEN=\'#00c853\',COL_YELLOW=\'#ffd600\',COL_RED=\'#ff1744\';'
             . 'var COL_BG=\'#0a0a1e\',COL_BORDER=\'#1e1e3a\',COL_TEXT=\'#9999bb\',COL_DB=\'#ccccee\',COL_ROOT=\'' . addslashes($bgColor) . '\';'
             . 'var DPR=window.devicePixelRatio||1;'

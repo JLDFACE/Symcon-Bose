@@ -105,6 +105,14 @@
                     "suffix": " ms"
                 },
                 {
+                    "type": "NumberSpinner",
+                    "name": "BarWidth",
+                    "caption": "Balkenbreite (px)",
+                    "minimum": 8,
+                    "maximum": 80,
+                    "suffix": " px"
+                },
+                {
                     "type": "SelectColor",
                     "name": "BackgroundColor",
                     "caption": "Hintergrundfarbe"
