@@ -110,8 +110,9 @@ class BoseModuleCRR extends IPSModule
     {
         $module = $this->ReadPropertyString('ModuleName');
         if ($module === '') return;
-        $this->SendCommand('GA"' . $module . '">1');
-        $this->SendCommand('GA"' . $module . '">2');
+        foreach ($this->GetParameterList() as [$idx1, $idx2]) {
+            $this->SendCommand('GA"' . $module . '">' . $idx1 . '>' . $idx2);
+        }
     }
 
     public function RequestAction($Ident, $Value)
@@ -209,8 +210,32 @@ class BoseModuleCRR extends IPSModule
     {
         if ($module === '') return;
         $prefix = $enable ? 'SUB "' : 'UNS "';
-        $this->SendCommand($prefix . 'GA"' . $module . '">1"');
-        $this->SendCommand($prefix . 'GA"' . $module . '">2"');
+        foreach ($this->GetParameterList() as [$idx1, $idx2]) {
+            $this->SendCommand($prefix . 'GA"' . $module . '">' . $idx1 . '>' . $idx2 . '"');
+        }
+    }
+
+    private function GetParameterList(): array
+    {
+        $showPreAEC  = (bool)$this->ReadPropertyBoolean('ShowPreAECMicMix');
+        $farEndCount = (int)$this->ReadPropertyInteger('FarEndCount');
+
+        // Index1=1: Room/Output (idx2 1-8)
+        $maxIdx2 = $showPreAEC ? 8 : 6;
+        $list = [];
+        for ($i = 1; $i <= $maxIdx2; $i++) {
+            $list[] = [1, $i];
+        }
+
+        // Index1=2: Program + Far Ends
+        $list[] = [2, 1]; // Program Level
+        $list[] = [2, 2]; // Program Mute
+        for ($n = 1; $n <= $farEndCount; $n++) {
+            $list[] = [2, ($n - 1) * 2 + 3]; // Far End N Level
+            $list[] = [2, ($n - 1) * 2 + 4]; // Far End N Mute
+        }
+
+        return $list;
     }
 
     private function SetValueIfChanged(string $ident, $value)
