@@ -10,7 +10,6 @@ class BoseModuleCRR extends IPSModule
 
         $this->ConnectParent("{69EBE0DC-8DDF-6F4E-E21A-5AC40FAF2050}");
 
-        // Profiles
         foreach (['BoseGainLevelDB', 'BoseMuteStatus'] as $p) {
             if (!IPS_VariableProfileExists($p)) {
                 IPS_CreateVariableProfile($p, $p === 'BoseMuteStatus' ? 0 : 2);
@@ -35,7 +34,9 @@ class BoseModuleCRR extends IPSModule
     {
         parent::ApplyChanges();
 
-        $module = (string)$this->ReadPropertyString('ModuleName');
+        $module      = (string)$this->ReadPropertyString('ModuleName');
+        $farEndCount = (int)$this->ReadPropertyInteger('FarEndCount');
+        $showPreAEC  = (bool)$this->ReadPropertyBoolean('ShowPreAECMicMix');
 
         if ($module === '') {
             $this->SetStatus(200);
@@ -43,30 +44,40 @@ class BoseModuleCRR extends IPSModule
             return;
         }
 
-        $farEndCount    = (int)$this->ReadPropertyInteger('FarEndCount');
-        $showPreAEC     = (bool)$this->ReadPropertyBoolean('ShowPreAECMicMix');
-
-        // Room/Output variables (Index1=1)
         $pos = 1;
-        $this->MaintainVariable('MasterVolume',    'Master Volume',     VARIABLETYPE_FLOAT,   'BoseGainLevelDB', $pos++, true); $this->EnableAction('MasterVolume');
-        $this->MaintainVariable('MasterMute',      'Master Mute',       VARIABLETYPE_BOOLEAN, 'BoseMuteStatus',  $pos++, true); $this->EnableAction('MasterMute');
-        $this->MaintainVariable('MicMixLevel',     'Mic Mix Level',     VARIABLETYPE_FLOAT,   'BoseGainLevelDB', $pos++, true); $this->EnableAction('MicMixLevel');
-        $this->MaintainVariable('MicMixMute',      'Mic Mix Mute',      VARIABLETYPE_BOOLEAN, 'BoseMuteStatus',  $pos++, true); $this->EnableAction('MicMixMute');
-        $this->MaintainVariable('NonMicMixLevel',  'Non-Mic Mix Level', VARIABLETYPE_FLOAT,   'BoseGainLevelDB', $pos++, true); $this->EnableAction('NonMicMixLevel');
-        $this->MaintainVariable('NonMicMixMute',   'Non-Mic Mix Mute',  VARIABLETYPE_BOOLEAN, 'BoseMuteStatus',  $pos++, true); $this->EnableAction('NonMicMixMute');
-        $this->MaintainVariable('PreAECMicMixLevel', 'Pre-AEC Mic Mix Level', VARIABLETYPE_FLOAT,   'BoseGainLevelDB', $pos++, $showPreAEC); if ($showPreAEC) $this->EnableAction('PreAECMicMixLevel');
-        $this->MaintainVariable('PreAECMicMixMute',  'Pre-AEC Mic Mix Mute',  VARIABLETYPE_BOOLEAN, 'BoseMuteStatus',  $pos++, $showPreAEC); if ($showPreAEC) $this->EnableAction('PreAECMicMixMute');
 
-        // Program/Far End variables (Index1=2)
-        $this->MaintainVariable('ProgramLevel', 'Program Level', VARIABLETYPE_FLOAT,   'BoseGainLevelDB', $pos++, true); $this->EnableAction('ProgramLevel');
-        $this->MaintainVariable('ProgramMute',  'Program Mute',  VARIABLETYPE_BOOLEAN, 'BoseMuteStatus',  $pos++, true); $this->EnableAction('ProgramMute');
+        // Helper to register a Level+Percent pair
+        $regLevel = function (string $ident, string $label, bool $keep) use (&$pos) {
+            $this->MaintainVariable($ident,        $label,       VARIABLETYPE_FLOAT,   'BoseGainLevelDB', $pos++, $keep);
+            $this->MaintainVariable($ident . 'Pct', $label . ' %', VARIABLETYPE_INTEGER, '~Intensity.100',  $pos++, $keep);
+            if ($keep) {
+                $this->EnableAction($ident);
+                $this->EnableAction($ident . 'Pct');
+            }
+        };
+        $regMute = function (string $ident, string $label, bool $keep) use (&$pos) {
+            $this->MaintainVariable($ident, $label, VARIABLETYPE_BOOLEAN, 'BoseMuteStatus', $pos++, $keep);
+            if ($keep) $this->EnableAction($ident);
+        };
+
+        // Room/Output (Index1=1)
+        $regLevel('MasterVolume',    'Master Volume',     true);
+        $regMute ('MasterMute',      'Master Mute',       true);
+        $regLevel('MicMixLevel',     'Mic Mix Level',     true);
+        $regMute ('MicMixMute',      'Mic Mix Mute',      true);
+        $regLevel('NonMicMixLevel',  'Non-Mic Mix Level', true);
+        $regMute ('NonMicMixMute',   'Non-Mic Mix Mute',  true);
+        $regLevel('PreAECMicMixLevel', 'Pre-AEC Mic Mix Level', $showPreAEC);
+        $regMute ('PreAECMicMixMute',  'Pre-AEC Mic Mix Mute',  $showPreAEC);
+
+        // Program/Far End (Index1=2)
+        $regLevel('ProgramLevel', 'Program Level', true);
+        $regMute ('ProgramMute',  'Program Mute',  true);
 
         for ($n = 1; $n <= 8; $n++) {
             $keep = $n <= $farEndCount;
-            $this->MaintainVariable('FarEnd' . $n . 'Level', 'Far End ' . $n . ' Level', VARIABLETYPE_FLOAT,   'BoseGainLevelDB', $pos++, $keep);
-            if ($keep) $this->EnableAction('FarEnd' . $n . 'Level');
-            $this->MaintainVariable('FarEnd' . $n . 'Mute',  'Far End ' . $n . ' Mute',  VARIABLETYPE_BOOLEAN, 'BoseMuteStatus',  $pos++, $keep);
-            if ($keep) $this->EnableAction('FarEnd' . $n . 'Mute');
+            $regLevel('FarEnd' . $n . 'Level', 'Far End ' . $n . ' Level', $keep);
+            $regMute ('FarEnd' . $n . 'Mute',  'Far End ' . $n . ' Mute',  $keep);
         }
 
         // Update subscriptions when module name changes
@@ -119,6 +130,15 @@ class BoseModuleCRR extends IPSModule
     {
         $module = $this->ReadPropertyString('ModuleName');
 
+        // Percent idents → convert to dB and delegate
+        if (substr($Ident, -3) === 'Pct') {
+            $dbIdent = substr($Ident, 0, -3);
+            $db = $this->PctToDb((int)$Value);
+            $this->RequestAction($dbIdent, $db);
+            $this->SetValueIfChanged($Ident, $Value);
+            return true;
+        }
+
         // Index1=1 — Room/Output
         $roomMap = [
             'MasterVolume'      => [1, 'float'],
@@ -135,6 +155,9 @@ class BoseModuleCRR extends IPSModule
             $v = $type === 'mute' ? ($Value ? 'F' : 'O') : round((float)$Value, 1);
             $this->SendCommand('SA"' . $module . '">1>' . $idx2 . '=' . $v);
             $this->SetValueIfChanged($Ident, $Value);
+            if ($type === 'float') {
+                $this->SetValueIfChanged($Ident . 'Pct', $this->DbToPct((float)$Value));
+            }
             return true;
         }
 
@@ -148,6 +171,9 @@ class BoseModuleCRR extends IPSModule
             $v = $type === 'mute' ? ($Value ? 'F' : 'O') : round((float)$Value, 1);
             $this->SendCommand('SA"' . $module . '">2>' . $idx2 . '=' . $v);
             $this->SetValueIfChanged($Ident, $Value);
+            if ($type === 'float') {
+                $this->SetValueIfChanged($Ident . 'Pct', $this->DbToPct((float)$Value));
+            }
             return true;
         }
 
@@ -159,6 +185,9 @@ class BoseModuleCRR extends IPSModule
             $v    = $type === 'Mute' ? ($Value ? 'F' : 'O') : round((float)$Value, 1);
             $this->SendCommand('SA"' . $module . '">2>' . $idx2 . '=' . $v);
             $this->SetValueIfChanged($Ident, $Value);
+            if ($type === 'Level') {
+                $this->SetValueIfChanged($Ident . 'Pct', $this->DbToPct((float)$Value));
+            }
             return true;
         }
 
@@ -189,20 +218,39 @@ class BoseModuleCRR extends IPSModule
         ];
         if (!isset($map[$idx2])) return;
         [$ident, $type] = $map[$idx2];
-        $this->SetValueIfChanged($ident, $type === 'mute' ? ($value === 'F') : (float)$value);
+        if ($type === 'mute') {
+            $this->SetValueIfChanged($ident, $value === 'F');
+        } else {
+            $db = (float)$value;
+            $this->SetValueIfChanged($ident,          $db);
+            $this->SetValueIfChanged($ident . 'Pct',  $this->DbToPct($db));
+        }
     }
 
     private function HandleProgramFarEnd(int $idx2, string $value)
     {
-        if ($idx2 === 1) { $this->SetValueIfChanged('ProgramLevel', (float)$value); return; }
-        if ($idx2 === 2) { $this->SetValueIfChanged('ProgramMute',  $value === 'F'); return; }
+        if ($idx2 === 1) {
+            $db = (float)$value;
+            $this->SetValueIfChanged('ProgramLevel',    $db);
+            $this->SetValueIfChanged('ProgramLevelPct', $this->DbToPct($db));
+            return;
+        }
+        if ($idx2 === 2) {
+            $this->SetValueIfChanged('ProgramMute', $value === 'F');
+            return;
+        }
 
-        // Far End: idx2=3→FE1 Level, idx2=4→FE1 Mute, idx2=5→FE2 Level, ...
         if ($idx2 >= 3) {
             $n    = (int)ceil(($idx2 - 2) / 2);
             $type = ($idx2 % 2 === 1) ? 'Level' : 'Mute';
             $ident = 'FarEnd' . $n . $type;
-            $this->SetValueIfChanged($ident, $type === 'Mute' ? ($value === 'F') : (float)$value);
+            if ($type === 'Mute') {
+                $this->SetValueIfChanged($ident, $value === 'F');
+            } else {
+                $db = (float)$value;
+                $this->SetValueIfChanged($ident,          $db);
+                $this->SetValueIfChanged($ident . 'Pct',  $this->DbToPct($db));
+            }
         }
     }
 
@@ -220,22 +268,30 @@ class BoseModuleCRR extends IPSModule
         $showPreAEC  = (bool)$this->ReadPropertyBoolean('ShowPreAECMicMix');
         $farEndCount = (int)$this->ReadPropertyInteger('FarEndCount');
 
-        // Index1=1: Room/Output (idx2 1-8)
         $maxIdx2 = $showPreAEC ? 8 : 6;
         $list = [];
         for ($i = 1; $i <= $maxIdx2; $i++) {
             $list[] = [1, $i];
         }
 
-        // Index1=2: Program + Far Ends
-        $list[] = [2, 1]; // Program Level
-        $list[] = [2, 2]; // Program Mute
+        $list[] = [2, 1];
+        $list[] = [2, 2];
         for ($n = 1; $n <= $farEndCount; $n++) {
-            $list[] = [2, ($n - 1) * 2 + 3]; // Far End N Level
-            $list[] = [2, ($n - 1) * 2 + 4]; // Far End N Mute
+            $list[] = [2, ($n - 1) * 2 + 3];
+            $list[] = [2, ($n - 1) * 2 + 4];
         }
 
         return $list;
+    }
+
+    private function DbToPct(float $db): int
+    {
+        return max(0, min(100, intval(100 - ($db / -60.5 * 100))));
+    }
+
+    private function PctToDb(int $pct): float
+    {
+        return round((100 - $pct) / 100 * -60.5, 1);
     }
 
     private function SetValueIfChanged(string $ident, $value)
