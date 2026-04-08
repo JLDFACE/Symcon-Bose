@@ -28,17 +28,5 @@
             "caption": "Werte abfragen",
             "onClick": "BOSE_PollCRR($id);"
         }
-    ],
-    "status": [
-        {
-            "code": 102,
-            "icon": "Active",
-            "caption": "Verbunden"
-        },
-        {
-            "code": 200,
-            "icon": "Inactive",
-            "caption": "Kein Modulname konfiguriert"
-        }
     ]
 }
