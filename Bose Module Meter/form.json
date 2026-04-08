@@ -137,6 +137,5 @@
             "caption": "Meter jetzt aktualisieren",
             "onClick": "BOSE_UpdateMeterHTML($id);"
         }
-    ],
-    "status": []
+    ]
 }
