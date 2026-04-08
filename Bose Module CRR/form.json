@@ -1,0 +1,44 @@
+{
+    "elements": [
+        {
+            "type": "ValidationTextBox",
+            "name": "ModuleName",
+            "caption": "Modulname (ControlSpace Designer)"
+        },
+        {
+            "type": "NumberSpinner",
+            "name": "FarEndCount",
+            "caption": "Anzahl Far End Eingänge",
+            "minimum": 0,
+            "maximum": 8
+        },
+        {
+            "type": "CheckBox",
+            "name": "ShowPreAECMicMix",
+            "caption": "Pre-AEC Mic Mix anzeigen"
+        },
+        {
+            "type": "Label",
+            "caption": "Beispiel: SA\"CRR 1\">1>1=-10.0 setzt Master Volume auf -10 dB"
+        }
+    ],
+    "actions": [
+        {
+            "type": "Button",
+            "caption": "Werte abfragen",
+            "onClick": "BOSE_PollCRR($id);"
+        }
+    ],
+    "status": [
+        {
+            "code": 102,
+            "icon": "Active",
+            "caption": "Verbunden"
+        },
+        {
+            "code": 200,
+            "icon": "Inactive",
+            "caption": "Kein Modulname konfiguriert"
+        }
+    ]
+}
