@@ -88,7 +88,7 @@ class BoseModuleCRR extends IPSModule
             $this->SetBuffer('LastModuleName', $module);
         }
 
-        $this->SetTimerInterval('PollCRR', 30000);
+        $this->SetTimerInterval('PollCRR', 300000); // 5 min — subscriptions handle real-time updates
         $this->SetStatus(102);
     }
 
@@ -123,6 +123,7 @@ class BoseModuleCRR extends IPSModule
         if ($module === '') return;
         foreach ($this->GetParameterList() as [$idx1, $idx2]) {
             $this->SendCommand('GA"' . $module . '">' . $idx1 . '>' . $idx2);
+            IPS_Sleep(50); // small gap to avoid flooding the serial bus
         }
     }
 
