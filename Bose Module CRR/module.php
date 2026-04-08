@@ -123,7 +123,6 @@ class BoseModuleCRR extends IPSModule
         if ($module === '') return;
         foreach ($this->GetParameterList() as [$idx1, $idx2]) {
             $this->SendCommand('GA"' . $module . '">' . $idx1 . '>' . $idx2);
-            IPS_Sleep(50); // small gap to avoid flooding the serial bus
         }
     }
 
