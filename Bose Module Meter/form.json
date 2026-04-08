@@ -109,14 +109,6 @@
                 },
                 {
                     "type": "NumberSpinner",
-                    "name": "UpdateInterval",
-                    "caption": "Poll-Intervall",
-                    "minimum": 100,
-                    "maximum": 5000,
-                    "suffix": " ms"
-                },
-                {
-                    "type": "NumberSpinner",
                     "name": "BarWidth",
                     "caption": "Balkenbreite (px)",
                     "minimum": 8,
@@ -146,9 +138,5 @@
             "onClick": "BOSE_UpdateMeterHTML($id);"
         }
     ],
-    "status": [
-        { "code": 102, "icon": "active",   "caption": "Meter aktiv" },
-        { "code": 104, "icon": "inactive", "caption": "Instanz inaktiv" },
-        { "code": 200, "icon": "error",    "caption": "Keine Meter konfiguriert" }
-    ]
+    "status": []
 }
