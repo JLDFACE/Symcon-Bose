@@ -1,8 +1,11 @@
 {
-    "id": "{3F8A2D1E-7C54-4B9E-A6F2-8D1E5C3A7B0F}",
-    "name": "Bose Module CRR",
-    "type": 3,
-    "parentRequirements": ["{E13A162B-3414-BD54-5C48-F802F8323D2B}"],
-    "implemented": ["{CCC989DC-BF59-BBFD-C02F-BB7D4D815E68}"],
-    "prefix": "BOSE"
+  "id": "{3F8A2D1E-7C54-4B9E-A6F2-8D1E5C3A7B0F}",
+  "name": "Bose Module CRR",
+  "aliases": [],
+  "type": 3,
+  "vendor": "FACE GmbH",
+  "parentRequirements": ["{E13A162B-3414-BD54-5C48-F802F8323D2B}"],
+  "childRequirements": [],
+  "implemented": ["{CCC989DC-BF59-BBFD-C02F-BB7D4D815E68}"],
+  "prefix": "BOSE"
 }
