@@ -7,7 +7,7 @@
             "items": [
                 {
                     "type": "Label",
-                    "caption": "Legt pro Kanal eine Pegel-Variable (dB) und eine Signal-Boolean (Signal / Kein Signal) an und pollt sie zyklisch. Auch aus Odoo auslesbar."
+                    "caption": "Legt nur die hier gewählten Kanäle als Variablen an. Pro Kanal wählbar: nur Signal (Boolean) oder Pegel (dB) + Signal. Aus Odoo auslesbar. Hinweis: Die ControlSpace-Labels der Kanäle lassen sich per Protokoll nicht auslesen – Anzeigenamen bitte manuell setzen."
                 },
                 {
                     "type": "Select",
@@ -18,6 +18,63 @@
                         { "caption": "ESP-880 / ESP-880 A", "value": "ESP880" },
                         { "caption": "EX-1280 / EX-1280 C", "value": "EX1280" }
                     ]
+                },
+                {
+                    "type": "List",
+                    "name": "SignalChannels",
+                    "caption": "Überwachte Kanäle",
+                    "rowCount": 8,
+                    "add": true,
+                    "delete": true,
+                    "columns": [
+                        {
+                            "name": "Direction",
+                            "caption": "Richtung",
+                            "width": "110px",
+                            "add": "in",
+                            "edit": {
+                                "type": "Select",
+                                "options": [
+                                    { "caption": "Eingang", "value": "in" },
+                                    { "caption": "Ausgang", "value": "out" }
+                                ]
+                            }
+                        },
+                        {
+                            "name": "Channel",
+                            "caption": "Kanal",
+                            "width": "70px",
+                            "add": 1,
+                            "edit": {
+                                "type": "NumberSpinner",
+                                "minimum": 1,
+                                "maximum": 8
+                            }
+                        },
+                        {
+                            "name": "Label",
+                            "caption": "Anzeigename (optional)",
+                            "width": "auto",
+                            "add": "",
+                            "edit": {
+                                "type": "ValidationTextBox"
+                            }
+                        },
+                        {
+                            "name": "Mode",
+                            "caption": "Modus",
+                            "width": "170px",
+                            "add": "bool",
+                            "edit": {
+                                "type": "Select",
+                                "options": [
+                                    { "caption": "Nur Signal (Boolean)", "value": "bool" },
+                                    { "caption": "Pegel + Signal", "value": "level" }
+                                ]
+                            }
+                        }
+                    ],
+                    "values": []
                 },
                 {
                     "type": "NumberSpinner",

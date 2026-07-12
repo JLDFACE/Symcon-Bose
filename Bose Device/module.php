@@ -168,7 +168,8 @@ class BoseDevice extends IPSModule
         IPS_SetVariableProfileAssociation("BoseSignalStatus", true,  "Signal",      "Ok",      0x00cc44);
 
         $this->RegisterPropertyString("SignalDeviceType", "");
-        $this->RegisterPropertyInteger("SignalPollInterval", 2000);
+        $this->RegisterPropertyString("SignalChannels", "[]");
+        $this->RegisterPropertyInteger("SignalPollInterval", 5000);
         $this->RegisterPropertyFloat("SignalThresholdIn", -50.0);
         $this->RegisterPropertyFloat("SignalThresholdOut", -30.0);
 
@@ -223,9 +224,8 @@ $this->RegisterTimer("FlushPending", 500, "BOSE_FlushPending(" . $this->Instance
 
         // Signal-/Pegel-Variablen anlegen bzw. entfernen und Poll-Timer setzen
         $this->MaintainSignalVariables();
-        $interval = count($this->GetSignalSlotMap()) > 0
-            ? max(500, (int)$this->ReadPropertyInteger("SignalPollInterval"))
-            : 0;
+        $active = count($this->GetSignalSlotMap()) > 0 && count($this->GetSignalChannels()) > 0;
+        $interval = $active ? max(500, (int)$this->ReadPropertyInteger("SignalPollInterval")) : 0;
         $this->SetTimerInterval("PollSignalLevels", $interval);
     }
 
@@ -693,72 +693,134 @@ $this->RegisterTimer("FlushPending", 500, "BOSE_FlushPending(" . $this->Instance
         return round(($dec / 2) - 60, 1);
     }
 
-    // Fragt für den konfigurierten Gerätetyp alle relevanten Slots ab.
+    // Liefert Slot und Index-innerhalb-des-Slots für einen (Richtung, Kanal).
+    private function GetChannelSlotInfo(string $dir, int $channel)
+    {
+        foreach ($this->GetSignalSlotMap() as $slot => $info) {
+            if ($info["dir"] !== $dir) {
+                continue;
+            }
+            $start = (int)$info["start"];
+            if ($channel >= $start && $channel <= $start + 3) {
+                return ["slot" => $slot, "idx" => $channel - $start];
+            }
+        }
+        return null;
+    }
+
+    // Konfigurierte Kanalliste normalisiert einlesen.
+    private function GetSignalChannels()
+    {
+        $list = json_decode($this->ReadPropertyString("SignalChannels"), true);
+        if (!is_array($list)) {
+            return [];
+        }
+        $out = [];
+        foreach ($list as $row) {
+            $ch = isset($row["Channel"]) ? (int)$row["Channel"] : 0;
+            if ($ch < 1 || $ch > 8) {
+                continue;
+            }
+            $out[] = [
+                "dir"   => (isset($row["Direction"]) && $row["Direction"] === "out") ? "out" : "in",
+                "ch"    => $ch,
+                "mode"  => (isset($row["Mode"]) && $row["Mode"] === "level") ? "level" : "bool",
+                "label" => isset($row["Label"]) ? trim((string)$row["Label"]) : "",
+            ];
+        }
+        return $out;
+    }
+
+    private function ChannelIdent(string $dir, int $ch, string $suffix)
+    {
+        return ($dir === "out" ? "Out" : "In") . $suffix . "_" . $ch;
+    }
+
+    private function ChannelBaseName(array $row)
+    {
+        if ($row["label"] !== "") {
+            return $row["label"];
+        }
+        return ($row["dir"] === "out" ? "Ausgang " : "Eingang ") . $row["ch"];
+    }
+
+    // Fragt nur die für die konfigurierten Kanäle nötigen Slots ab.
     public function PollSignalLevels()
     {
-        $map = $this->GetSignalSlotMap();
-        if (count($map) === 0) {
-            return;
+        $slots = [];
+        foreach ($this->GetSignalChannels() as $row) {
+            $info = $this->GetChannelSlotInfo($row["dir"], $row["ch"]);
+            if ($info !== null) {
+                $slots[$info["slot"]] = true;
+            }
         }
-        foreach (array_keys($map) as $slot) {
+        foreach (array_keys($slots) as $slot) {
             $this->SendCommand("GL " . $slot);
         }
     }
 
-    // Wertet eine GL-Antwort aus und schreibt Pegel + Signal-Boolean je Kanal.
+    // Wertet eine GL-Antwort aus und aktualisiert die konfigurierten Kanäle dieses Slots.
     private function ConsumeSignalLevel(int $slot, array $hexVals)
     {
-        $map = $this->GetSignalSlotMap();
-        if (!isset($map[$slot])) {
-            return;
-        }
-        $dir    = $map[$slot]["dir"];
-        $start  = (int)$map[$slot]["start"];
-        $prefix = ($dir === "out") ? "Out" : "In";
-        $thr    = ($dir === "out")
-            ? (float)$this->ReadPropertyFloat("SignalThresholdOut")
-            : (float)$this->ReadPropertyFloat("SignalThresholdIn");
+        foreach ($this->GetSignalChannels() as $row) {
+            $info = $this->GetChannelSlotInfo($row["dir"], $row["ch"]);
+            if ($info === null || $info["slot"] !== $slot) {
+                continue;
+            }
+            $idx = $info["idx"];
+            if (!isset($hexVals[$idx])) {
+                continue;
+            }
+            $db  = $this->LevelFromHex($row["dir"], (string)$hexVals[$idx]);
+            $thr = ($row["dir"] === "out")
+                ? (float)$this->ReadPropertyFloat("SignalThresholdOut")
+                : (float)$this->ReadPropertyFloat("SignalThresholdIn");
 
-        $count = min(4, count($hexVals));
-        for ($i = 0; $i < $count; $i++) {
-            $ch = $start + $i;
-            $db = $this->LevelFromHex($dir, (string)$hexVals[$i]);
-            $this->SetValueIfChanged($prefix . "Level_" . $ch, $db);
-            $this->SetValueIfChanged($prefix . "Signal_" . $ch, $db > $thr);
+            $this->SetValueIfChanged($this->ChannelIdent($row["dir"], $row["ch"], "Signal"), $db > $thr);
+            if ($row["mode"] === "level") {
+                $this->SetValueIfChanged($this->ChannelIdent($row["dir"], $row["ch"], "Level"), $db);
+            }
         }
     }
 
-    // Legt die In/Out-Variablen passend zum Gerätetyp an bzw. entfernt sie wieder.
+    // Legt nur die konfigurierten Variablen an und entfernt alle anderen Auto-Variablen.
     private function MaintainSignalVariables()
     {
-        $map = $this->GetSignalSlotMap();
+        // Ohne gewählten Gerätetyp keine Variablen anlegen (kein Slot-Mapping möglich).
+        $channels = (count($this->GetSignalSlotMap()) > 0) ? $this->GetSignalChannels() : [];
 
-        $inChannels  = [];
-        $outChannels = [];
-        foreach ($map as $slot => $info) {
-            for ($i = 0; $i < 4; $i++) {
-                $ch = (int)$info["start"] + $i;
-                if ($info["dir"] === "in") {
-                    $inChannels[$ch] = true;
-                } else {
-                    $outChannels[$ch] = true;
-                }
+        // Gewünschte Variablen aus der Konfiguration bestimmen.
+        $wanted = [];
+        $pos = 100;
+        foreach ($channels as $row) {
+            $base     = $this->ChannelBaseName($row);
+            $sigIdent = $this->ChannelIdent($row["dir"], $row["ch"], "Signal");
+            $wanted[$sigIdent] = [$base . " Signal", VARIABLETYPE_BOOLEAN, "BoseSignalStatus", $pos++];
+            if ($row["mode"] === "level") {
+                $lvlIdent = $this->ChannelIdent($row["dir"], $row["ch"], "Level");
+                $profile  = ($row["dir"] === "out") ? "BoseOutLevelDBu" : "BoseInLevelDBFS";
+                $wanted[$lvlIdent] = [$base . " Pegel", VARIABLETYPE_FLOAT, $profile, $pos++];
             }
         }
 
-        for ($ch = 1; $ch <= 16; $ch++) {
-            $keepIn = isset($inChannels[$ch]);
-            $this->MaintainVariable("InLevel_" . $ch,  "Eingang " . $ch . " Pegel",  VARIABLETYPE_FLOAT,   "BoseInLevelDBFS", 100 + $ch * 2,     $keepIn);
-            $this->MaintainVariable("InSignal_" . $ch, "Eingang " . $ch . " Signal", VARIABLETYPE_BOOLEAN, "BoseSignalStatus", 100 + $ch * 2 + 1, $keepIn);
-            if ($keepIn) {
-                $this->DisableArchive("InLevel_" . $ch);
-            }
-
-            $keepOut = isset($outChannels[$ch]);
-            $this->MaintainVariable("OutLevel_" . $ch,  "Ausgang " . $ch . " Pegel",  VARIABLETYPE_FLOAT,   "BoseOutLevelDBu", 200 + $ch * 2,     $keepOut);
-            $this->MaintainVariable("OutSignal_" . $ch, "Ausgang " . $ch . " Signal", VARIABLETYPE_BOOLEAN, "BoseSignalStatus", 200 + $ch * 2 + 1, $keepOut);
-            if ($keepOut) {
-                $this->DisableArchive("OutLevel_" . $ch);
+        // Alle möglichen Auto-Idents durchgehen: gewünschte anlegen/aktualisieren, Rest entfernen.
+        foreach (["In", "Out"] as $p) {
+            for ($ch = 1; $ch <= 8; $ch++) {
+                $variants = [
+                    $p . "Signal_" . $ch => VARIABLETYPE_BOOLEAN,
+                    $p . "Level_"  . $ch => VARIABLETYPE_FLOAT,
+                ];
+                foreach ($variants as $ident => $type) {
+                    if (isset($wanted[$ident])) {
+                        [$name, $t, $prof, $position] = $wanted[$ident];
+                        $this->MaintainVariable($ident, $name, $t, $prof, $position, true);
+                        if ($t === VARIABLETYPE_FLOAT) {
+                            $this->DisableArchive($ident);
+                        }
+                    } else {
+                        $this->MaintainVariable($ident, "", $type, "", 0, false);
+                    }
+                }
             }
         }
     }
