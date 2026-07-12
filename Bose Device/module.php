@@ -794,12 +794,13 @@ $this->RegisterTimer("FlushPending", 500, "BOSE_FlushPending(" . $this->Instance
         $pos = 100;
         foreach ($channels as $row) {
             $base     = $this->ChannelBaseName($row);
+            $explicit = ($row["label"] !== ""); // Label maßgeblich, wenn gesetzt
             $sigIdent = $this->ChannelIdent($row["dir"], $row["ch"], "Signal");
-            $wanted[$sigIdent] = [$base . " Signal", VARIABLETYPE_BOOLEAN, "BoseSignalStatus", $pos++];
+            $wanted[$sigIdent] = [$base . " Signal", VARIABLETYPE_BOOLEAN, "BoseSignalStatus", $pos++, $explicit];
             if ($row["mode"] === "level") {
                 $lvlIdent = $this->ChannelIdent($row["dir"], $row["ch"], "Level");
                 $profile  = ($row["dir"] === "out") ? "BoseOutLevelDBu" : "BoseInLevelDBFS";
-                $wanted[$lvlIdent] = [$base . " Pegel", VARIABLETYPE_FLOAT, $profile, $pos++];
+                $wanted[$lvlIdent] = [$base . " Pegel", VARIABLETYPE_FLOAT, $profile, $pos++, $explicit];
             }
         }
 
@@ -812,8 +813,14 @@ $this->RegisterTimer("FlushPending", 500, "BOSE_FlushPending(" . $this->Instance
                 ];
                 foreach ($variants as $ident => $type) {
                     if (isset($wanted[$ident])) {
-                        [$name, $t, $prof, $position] = $wanted[$ident];
+                        [$name, $t, $prof, $position, $explicit] = $wanted[$ident];
                         $this->MaintainVariable($ident, $name, $t, $prof, $position, true);
+                        if ($explicit) {
+                            $vid = @$this->GetIDForIdent($ident);
+                            if ($vid > 0 && IPS_GetName($vid) !== $name) {
+                                IPS_SetName($vid, $name);
+                            }
+                        }
                         if ($t === VARIABLETYPE_FLOAT) {
                             $this->DisableArchive($ident);
                         }
