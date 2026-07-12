@@ -143,6 +143,35 @@ class BoseDevice extends IPSModule
             IPS_SetVariableProfileAssociation($profileName, $i, "Set $i", "Database", -1);
         }
 
+        // ── Signal-/Pegelüberwachung (In/Out) ──────────────────────
+        // Eingänge werden als dBFS (-60..0) dargestellt, Fixed-I/O ESP/EX-Ausgänge als dBu (-35..+25).
+        if (!IPS_VariableProfileExists("BoseInLevelDBFS")) {
+            IPS_CreateVariableProfile("BoseInLevelDBFS", 2);
+        }
+        IPS_SetVariableProfileText("BoseInLevelDBFS", "", " dBFS");
+        IPS_SetVariableProfileValues("BoseInLevelDBFS", -60, 0, 0.5);
+        IPS_SetVariableProfileDigits("BoseInLevelDBFS", 1);
+        IPS_SetVariableProfileIcon("BoseInLevelDBFS", "Speaker");
+
+        if (!IPS_VariableProfileExists("BoseOutLevelDBu")) {
+            IPS_CreateVariableProfile("BoseOutLevelDBu", 2);
+        }
+        IPS_SetVariableProfileText("BoseOutLevelDBu", "", " dBu");
+        IPS_SetVariableProfileValues("BoseOutLevelDBu", -35, 25, 0.5);
+        IPS_SetVariableProfileDigits("BoseOutLevelDBu", 1);
+        IPS_SetVariableProfileIcon("BoseOutLevelDBu", "Speaker");
+
+        if (!IPS_VariableProfileExists("BoseSignalStatus")) {
+            IPS_CreateVariableProfile("BoseSignalStatus", 0);
+        }
+        IPS_SetVariableProfileAssociation("BoseSignalStatus", false, "Kein Signal", "Warning", 0xff4444);
+        IPS_SetVariableProfileAssociation("BoseSignalStatus", true,  "Signal",      "Ok",      0x00cc44);
+
+        $this->RegisterPropertyString("SignalDeviceType", "");
+        $this->RegisterPropertyInteger("SignalPollInterval", 2000);
+        $this->RegisterPropertyFloat("SignalThresholdIn", -50.0);
+        $this->RegisterPropertyFloat("SignalThresholdOut", -30.0);
+
         $this->RegisterVariableBoolean("OnlineStatus", "Status", "BoseOnlineStatus", 0);
         $this->RegisterVariableInteger("ParameterSet", "Parameter Set", "BoseParameterSet", 1);
         $this->RegisterVariableInteger("LastOnline", "Last Online", "~UnixTimestamp", 2);
@@ -152,6 +181,7 @@ class BoseDevice extends IPSModule
         $this->RegisterTimer("GetLastParameterSet", 30000, 'BOSE_SendCommand(' . $this->InstanceID . ', \'GS\');');
         $this->RegisterTimer("CommandTimeoutCheck", 30000, 'BOSE_CommandTimeoutCheck(' . $this->InstanceID . ');');
 $this->RegisterTimer("FlushPending", 500, "BOSE_FlushPending(" . $this->InstanceID . ");");
+        $this->RegisterTimer("PollSignalLevels", 0, "BOSE_PollSignalLevels(" . $this->InstanceID . ");");
 
         $this->SetBuffer("pingTimeouts", 0);
         $this->SetBuffer("LastDeviceResponse", 0);
@@ -190,6 +220,13 @@ $this->RegisterTimer("FlushPending", 500, "BOSE_FlushPending(" . $this->Instance
                 $this->SetBuffer("PortInitialized", "1");
             }
         }
+
+        // Signal-/Pegel-Variablen anlegen bzw. entfernen und Poll-Timer setzen
+        $this->MaintainSignalVariables();
+        $interval = count($this->GetSignalSlotMap()) > 0
+            ? max(500, (int)$this->ReadPropertyInteger("SignalPollInterval"))
+            : 0;
+        $this->SetTimerInterval("PollSignalLevels", $interval);
     }
 
     public function Destroy()
@@ -589,6 +626,9 @@ $this->RegisterTimer("FlushPending", 500, "BOSE_FlushPending(" . $this->Instance
                                 "levels"  => $levels
                             ]
                         ]));
+
+                        // Zusätzlich lokale In/Out-Pegel- und Signal-Variablen füllen
+                        $this->ConsumeSignalLevel($slot, $hexVals);
                     }
                 }
             }
@@ -615,5 +655,123 @@ $this->RegisterTimer("FlushPending", 500, "BOSE_FlushPending(" . $this->Instance
         $this->SetValueIfChanged($Ident, $Value);
 
         return true;
+    }
+
+    // ── Signal-/Pegelüberwachung ───────────────────────────────
+
+    // Slot-Zuordnung je Gerätetyp. Jeder Slot liefert 4 Kanäle; "start" = globale Kanalnummer des ersten.
+    // Quelle: ControlSpace Serial Protocol – "GL Indices".
+    private function GetSignalSlotMap()
+    {
+        switch ((string)$this->ReadPropertyString("SignalDeviceType")) {
+            case "ESP880":
+                return [
+                    1 => ["dir" => "in",  "start" => 1],
+                    3 => ["dir" => "in",  "start" => 5],
+                    2 => ["dir" => "out", "start" => 1],
+                    4 => ["dir" => "out", "start" => 5],
+                ];
+            case "EX1280":
+                return [
+                    3 => ["dir" => "in",  "start" => 1],
+                    4 => ["dir" => "in",  "start" => 5],
+                    1 => ["dir" => "out", "start" => 1],
+                    2 => ["dir" => "out", "start" => 5],
+                ];
+            default:
+                return [];
+        }
+    }
+
+    // Hex-Level in dB umrechnen (Eingänge dBFS, Fixed-I/O-Ausgänge dBu).
+    private function LevelFromHex(string $dir, string $hex)
+    {
+        $dec = hexdec($hex);
+        if ($dir === "out") {
+            return round(($dec / 2) - 35, 1);
+        }
+        return round(($dec / 2) - 60, 1);
+    }
+
+    // Fragt für den konfigurierten Gerätetyp alle relevanten Slots ab.
+    public function PollSignalLevels()
+    {
+        $map = $this->GetSignalSlotMap();
+        if (count($map) === 0) {
+            return;
+        }
+        foreach (array_keys($map) as $slot) {
+            $this->SendCommand("GL " . $slot);
+        }
+    }
+
+    // Wertet eine GL-Antwort aus und schreibt Pegel + Signal-Boolean je Kanal.
+    private function ConsumeSignalLevel(int $slot, array $hexVals)
+    {
+        $map = $this->GetSignalSlotMap();
+        if (!isset($map[$slot])) {
+            return;
+        }
+        $dir    = $map[$slot]["dir"];
+        $start  = (int)$map[$slot]["start"];
+        $prefix = ($dir === "out") ? "Out" : "In";
+        $thr    = ($dir === "out")
+            ? (float)$this->ReadPropertyFloat("SignalThresholdOut")
+            : (float)$this->ReadPropertyFloat("SignalThresholdIn");
+
+        $count = min(4, count($hexVals));
+        for ($i = 0; $i < $count; $i++) {
+            $ch = $start + $i;
+            $db = $this->LevelFromHex($dir, (string)$hexVals[$i]);
+            $this->SetValueIfChanged($prefix . "Level_" . $ch, $db);
+            $this->SetValueIfChanged($prefix . "Signal_" . $ch, $db > $thr);
+        }
+    }
+
+    // Legt die In/Out-Variablen passend zum Gerätetyp an bzw. entfernt sie wieder.
+    private function MaintainSignalVariables()
+    {
+        $map = $this->GetSignalSlotMap();
+
+        $inChannels  = [];
+        $outChannels = [];
+        foreach ($map as $slot => $info) {
+            for ($i = 0; $i < 4; $i++) {
+                $ch = (int)$info["start"] + $i;
+                if ($info["dir"] === "in") {
+                    $inChannels[$ch] = true;
+                } else {
+                    $outChannels[$ch] = true;
+                }
+            }
+        }
+
+        for ($ch = 1; $ch <= 16; $ch++) {
+            $keepIn = isset($inChannels[$ch]);
+            $this->MaintainVariable("InLevel_" . $ch,  "Eingang " . $ch . " Pegel",  VARIABLETYPE_FLOAT,   "BoseInLevelDBFS", 100 + $ch * 2,     $keepIn);
+            $this->MaintainVariable("InSignal_" . $ch, "Eingang " . $ch . " Signal", VARIABLETYPE_BOOLEAN, "BoseSignalStatus", 100 + $ch * 2 + 1, $keepIn);
+            if ($keepIn) {
+                $this->DisableArchive("InLevel_" . $ch);
+            }
+
+            $keepOut = isset($outChannels[$ch]);
+            $this->MaintainVariable("OutLevel_" . $ch,  "Ausgang " . $ch . " Pegel",  VARIABLETYPE_FLOAT,   "BoseOutLevelDBu", 200 + $ch * 2,     $keepOut);
+            $this->MaintainVariable("OutSignal_" . $ch, "Ausgang " . $ch . " Signal", VARIABLETYPE_BOOLEAN, "BoseSignalStatus", 200 + $ch * 2 + 1, $keepOut);
+            if ($keepOut) {
+                $this->DisableArchive("OutLevel_" . $ch);
+            }
+        }
+    }
+
+    // Pegel-Variablen ändern sich häufig – Archivierung deaktivieren (wie im Meter-Modul).
+    private function DisableArchive(string $ident)
+    {
+        $vid = @$this->GetIDForIdent($ident);
+        if ($vid > 0) {
+            $archiveIDs = IPS_GetInstanceListByModuleID('{43192F0B-135B-4CE7-A0A7-1475603F3060}');
+            if (count($archiveIDs) > 0) {
+                AC_SetLoggingStatus($archiveIDs[0], $vid, false);
+            }
+        }
     }
 }

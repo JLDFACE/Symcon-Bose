@@ -1,1 +1,58 @@
-{}
+{
+    "elements": [
+        {
+            "type": "ExpansionPanel",
+            "caption": "Signal-/Pegelüberwachung (In / Out)",
+            "expanded": true,
+            "items": [
+                {
+                    "type": "Label",
+                    "caption": "Legt pro Kanal eine Pegel-Variable (dB) und eine Signal-Boolean (Signal / Kein Signal) an und pollt sie zyklisch. Auch aus Odoo auslesbar."
+                },
+                {
+                    "type": "Select",
+                    "name": "SignalDeviceType",
+                    "caption": "Gerätetyp (Slot-Zuordnung)",
+                    "options": [
+                        { "caption": "— deaktiviert —", "value": "" },
+                        { "caption": "ESP-880 / ESP-880 A", "value": "ESP880" },
+                        { "caption": "EX-1280 / EX-1280 C", "value": "EX1280" }
+                    ]
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "SignalPollInterval",
+                    "caption": "Abfrageintervall",
+                    "suffix": " ms",
+                    "minimum": 500,
+                    "maximum": 60000
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "SignalThresholdIn",
+                    "caption": "Signal-Schwelle Eingänge",
+                    "digits": 1,
+                    "suffix": " dBFS",
+                    "minimum": -60,
+                    "maximum": 0
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "SignalThresholdOut",
+                    "caption": "Signal-Schwelle Ausgänge",
+                    "digits": 1,
+                    "suffix": " dBu",
+                    "minimum": -35,
+                    "maximum": 25
+                }
+            ]
+        }
+    ],
+    "actions": [
+        {
+            "type": "Button",
+            "caption": "Pegel jetzt abfragen",
+            "onClick": "BOSE_PollSignalLevels($id);"
+        }
+    ]
+}
