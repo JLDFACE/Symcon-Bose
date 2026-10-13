@@ -1,0 +1,72 @@
+{
+  "elements": [
+    {
+      "type": "ValidationTextBox",
+      "caption": "Name (Label im ControlSpace Designer)",
+      "name": "ModuleName"
+    },
+    {
+      "type": "RowLayout",
+      "items": [
+        {
+          "type": "NumberSpinner",
+          "caption": "Eingänge",
+          "name": "Inputs",
+          "minimum": 1,
+          "maximum": 32
+        },
+        {
+          "type": "NumberSpinner",
+          "caption": "Ausgänge",
+          "name": "Outputs",
+          "minimum": 1,
+          "maximum": 32
+        }
+      ]
+    },
+    {
+      "type": "ValidationTextBox",
+      "caption": "Eingangsnamen (optional, kommagetrennt)",
+      "name": "InputNames"
+    },
+    {
+      "type": "ValidationTextBox",
+      "caption": "Ausgangsnamen (optional, kommagetrennt)",
+      "name": "OutputNames"
+    },
+    {
+      "type": "CheckBox",
+      "caption": "Crosspoint-Pegel (dB) anlegen",
+      "name": "ShowLevels"
+    },
+    {
+      "type": "CheckBox",
+      "caption": "Ein-/Ausgangs-Mutes anlegen",
+      "name": "ShowChannelMutes"
+    },
+    {
+      "type": "ExpansionPanel",
+      "caption": "Erweitert",
+      "items": [
+        {
+          "type": "NumberSpinner",
+          "caption": "Index-Schrittweite (0 = Anzahl Ausgänge)",
+          "name": "IndexStride",
+          "minimum": 0,
+          "maximum": 32
+        },
+        {
+          "type": "Label",
+          "caption": "Crosspoint-Index = (Eingang - 1) x Schrittweite + Ausgang. Nur ändern, wenn der DSP mit fester Schrittweite adressiert (z. B. PowerMatch: 8)."
+        }
+      ]
+    }
+  ],
+  "actions": [
+    {
+      "type": "Button",
+      "caption": "Status jetzt abfragen",
+      "onClick": "BOSE_PollMatrix($id);"
+    }
+  ]
+}

@@ -38,6 +38,22 @@ Zentrale Geräteinstanz.
 - Umschaltung von Quellen / Presets
 - Schnelle Statusaktualisierung **nur nach Änderung** (Burst-Polling)
 
+### Bose Module Matrix
+- Steuerung eines **Matrix-Mixer**-Moduls (bis 32 × 32)
+- Pro Crosspoint eine Schaltvariable `XP_<Ein>_<Aus>` (Ein/Aus)
+- Optional Crosspoint-Pegel `XPL_<Ein>_<Aus>` (-60.5 … 0.0 dB)
+- Optional Ein-/Ausgangs-Mutes `InMute_<n>` / `OutMute_<n>` (true = Ton ein, wie beim Gain-Modul)
+- Ein-/Ausgangsnamen kommagetrennt hinterlegbar, sie bilden die Variablennamen
+- Status in Echtzeit über SUB-Abos, Fallback-Poll alle 5 Minuten
+- Für Skripte, z. B. Trennwand-Logik:
+  - `BOSE_SetCrosspoint($id, $eingang, $ausgang, true|false)`
+  - `BOSE_SetCrosspointLevel($id, $eingang, $ausgang, -10.0)`
+  - `BOSE_SetInputActive($id, $eingang, true|false)` / `BOSE_SetOutputActive($id, $ausgang, true|false)`
+- Adressierung laut Protokoll: Index 2 = (Eingang - 1) × Anzahl Ausgänge + Ausgang.
+  Weicht ein Gerät davon ab, lässt sich die Schrittweite unter „Erweitert“ festlegen.
+- Hinweis: Jeder Crosspoint ist ein eigenes Abo. Große Matrizen (z. B. 5 × 20 = 100 Abos)
+  funktionieren, Pegel-Variablen aber nur aktivieren, wenn sie gebraucht werden.
+
 ---
 
 ## Installation
