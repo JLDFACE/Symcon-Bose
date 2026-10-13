@@ -97,6 +97,7 @@ class BoseModuleMatrix extends IPSModule
             }
         }
         $this->RemoveObsoleteVariables($wanted);
+        $this->ApplyVariableNames($inNames, $outNames);
 
         // Abos nur für geänderte Parameter anpassen
         $newSubs = $module === '' ? [] : $this->BuildGetCommands($module);
@@ -334,6 +335,29 @@ class BoseModuleMatrix extends IPSModule
             if (!preg_match('/^(XP|XPL)_\d+_\d+$|^(InMute|OutMute)_\d+$/', $ident)) continue;
             if (!isset($wanted[$ident])) {
                 $this->UnregisterVariable($ident);
+            }
+        }
+    }
+
+    // MaintainVariable benennt bestehende Variablen nicht um – Namen aus der Konfiguration nachziehen
+    private function ApplyVariableNames(array $inNames, array $outNames)
+    {
+        foreach (IPS_GetChildrenIDs($this->InstanceID) as $childID) {
+            $obj = IPS_GetObject($childID);
+            if ($obj['ObjectType'] !== 2) continue;
+            $ident = $obj['ObjectIdent'];
+            $name = null;
+            if (preg_match('/^XP_(\d+)_(\d+)$/', $ident, $m)) {
+                $name = $inNames[(int)$m[1]] . ' > ' . $outNames[(int)$m[2]];
+            } elseif (preg_match('/^XPL_(\d+)_(\d+)$/', $ident, $m)) {
+                $name = $inNames[(int)$m[1]] . ' > ' . $outNames[(int)$m[2]] . ' Pegel';
+            } elseif (preg_match('/^InMute_(\d+)$/', $ident, $m)) {
+                $name = $inNames[(int)$m[1]] . ' Ton';
+            } elseif (preg_match('/^OutMute_(\d+)$/', $ident, $m)) {
+                $name = $outNames[(int)$m[1]] . ' Ton';
+            }
+            if ($name !== null && $obj['ObjectName'] !== $name) {
+                IPS_SetName($childID, $name);
             }
         }
     }
